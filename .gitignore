@@ -1,0 +1,4 @@
+evmdd/__pycache__
+evmdd/*.pyc
+sphinx/_build
+sphinx/*.pyc
