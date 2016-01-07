@@ -23,12 +23,13 @@ function terms specified in Python syntax to |EVMDDs|.
 """
 
 import ast
+from numbers import Integral
 
 from .evmdd import EvmddManager
 
 _LEGAL_EXPRESSIONS = [ast.Expression, ast.Load, ast.BinOp,
                       ast.Add, ast.Mult, ast.Num, ast.Name,
-                      ast.UnaryOp, ast.USub, ast.Sub]
+                      ast.UnaryOp, ast.USub, ast.Sub, ast.Pow]
 
 def read_function_term(function_term):
     """Read a function term and transform it into an AST.
@@ -90,9 +91,15 @@ def _to_evmdd_rec(node, manager):
             return left + right
         elif isinstance(node.op, ast.Sub):
             return left - right
-        else:
-            assert isinstance(node.op, ast.Mult)
+        elif isinstance(node.op, ast.Mult):
             return left * right
+        else:
+            assert isinstance(node.op, ast.Pow)
+            if ((not isinstance(node.right, ast.Num)) or
+                (not isinstance(node.right.n, Integral)) or
+                (node.right.n < 0)):
+                raise ValueError("EVMDDs may only be raised to a nonnegative integral power.")
+            return left ** node.right.n
     else:
         assert isinstance(node, ast.UnaryOp)
         assert isinstance(node.op, ast.USub)
@@ -163,7 +170,8 @@ def term_to_evmdd(function_term, **kwargs):
         ...     '-A', 'A-B', 'B-A', '-(A+B)',
         ...     'A*B + B', 'B + A*B',
         ...     'A*B*B + C + 2', 'A*B - 17',
-        ...     'A*B - A*B', 'A-A'
+        ...     'A*B - A*B', 'A-A',
+        ...     '1*(A+2)', 'A*(B+2)', 'A*(B+2)*(B+2) + C + 2',
         ... ]
         ...
         >>> domain_size = 4

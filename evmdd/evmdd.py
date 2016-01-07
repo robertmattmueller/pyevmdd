@@ -30,6 +30,7 @@ supposed to deal with fully reduced (if true) or quasi-reduced (if false)
 """
 
 import logging
+from numbers import Integral
 
 from .util import memoize, EqualityMixin
 
@@ -74,24 +75,15 @@ def _aggregate_weights(weight1, weight2, oper):
 def _is_terminal_case(edge1, edge2, oper):
     """Test if `edge1` and `edge2` can be combined with operator `oper`
     without the need to recursively traverse either of the two |EVMDDs|.
-
-    For addition and subtraction, this is the case if at least one of the two
-    |EVMDDs| is a constant, i.e., a dangling incoming edge leading directly
-    to the sink node.
-
-    For multiplication, *both* |EVMDDs| have to be constants that can be
-    multiplied directly.
     """
     edge1_is_sink = edge1.succ.is_sink_node()
     edge2_is_sink = edge2.succ.is_sink_node()
 
-    if oper is Edge.__add__:
+    if oper is Edge.__add__ or oper is Edge.__mul__:
         return edge1_is_sink or edge2_is_sink
-    elif oper is Edge.__sub__:
-        return edge2_is_sink
     else:
-        assert oper is Edge.__mul__
-        return edge1_is_sink and edge2_is_sink
+        assert oper is Edge.__sub__
+        return edge2_is_sink
 
 def _terminal_value(edge1, edge2, oper, is_fully_reduced):
     """Compute the new |EVMDD| for `edge1 oper edge2` in the terminal case
@@ -110,15 +102,30 @@ def _terminal_value(edge1, edge2, oper, is_fully_reduced):
     """
     assert _is_terminal_case(edge1, edge2, oper)
     if edge1.succ.is_sink_node():
-        recurse_into = edge2
+        sink_edge, potential_non_sink_edge = edge1, edge2
     else:
-        recurse_into = edge1
+        sink_edge, potential_non_sink_edge = edge2, edge1
 
     result_weight = _aggregate_weights(edge1.weight, edge2.weight, oper)
-    result_succ = recurse_into.succ
 
-    return Edge(weight=result_weight, succ=result_succ,
-                is_fully_reduced=is_fully_reduced)
+    if oper is Edge.__add__ or oper is Edge.__sub__:
+        result_succ = potential_non_sink_edge.succ
+    else:
+        assert oper is Edge.__mul__
+        if potential_non_sink_edge.succ.is_sink_node():
+            result_succ = potential_non_sink_edge.succ
+        else:
+            succ = potential_non_sink_edge.succ
+            scaled_children = tuple([sink_edge * child for child in succ.children])
+
+            result_succ = Node(level=succ.level,
+                               children=scaled_children,
+                               is_fully_reduced=is_fully_reduced)
+
+            if is_fully_reduced:
+                result_succ = _perform_shannon_reduction(result_succ)
+
+    return Edge(weight=result_weight, succ=result_succ, is_fully_reduced=is_fully_reduced)
 
 def _determine_children_on_same_level(edge1, edge2):
     """In case one of the |EVMDDs| to which an arithmetic operation is
@@ -131,14 +138,16 @@ def _determine_children_on_same_level(edge1, edge2):
     requires. Then, we can call `apply` recursively.
 
     If we have to locally quasi-reduce an |EVMDD|, then we have to set the
-    weight of the new edges to zero (or, equivalently, as in this
-    implememtation, assign the parent weight to all the new children and
-    set the parent weight to zero instead).
+    weight of the new edges to zero.
     """
     if edge1.succ.level >= edge2.succ.level:
-        return edge1.succ.children, edge1.weight
+        modified_weight_children = [
+                Edge(weight=child.weight+edge1.weight,
+                     succ=child.succ,
+                     is_fully_reduced=child.is_fully_reduced) for child in edge1.succ.children]
+        return modified_weight_children
     else:
-        return len(edge2.succ.children) * tuple([edge1]), 0
+        return len(edge2.succ.children) * tuple([edge1])
 
 def _log_apply(edge1, edge2, oper, result, terminal):
     """Log result of operator application to two edges.
@@ -164,7 +173,7 @@ def _log_apply(edge1, edge2, oper, result, terminal):
                   ('    %s results in\n' % repr(edge2)) +
                   ('    %s\n' % repr(result)))
 
-def _perform_shannon_reduction(weight, succ, children):
+def _perform_shannon_reduction(succ):
     """Perform Shannon reduction while combining two |EVMDDs| into one.
 
     If all outgoing edges (`children`) from the next node (`succ`) reached via
@@ -174,6 +183,7 @@ def _perform_shannon_reduction(weight, succ, children):
     successor weights are already normalized, i.e., if all children carry the
     same weight, this is zero for all of them.
     """
+    children = succ.children
     first_child_weight = children[0].weight
     first_child_succ = children[0].succ
     if (all([child.weight == first_child_weight for child in children]) and
@@ -182,7 +192,7 @@ def _perform_shannon_reduction(weight, succ, children):
         succ_after_reduction = first_child_succ
     else:
         succ_after_reduction = succ
-    return Edge(weight=weight, succ=succ_after_reduction, is_fully_reduced=True)
+    return succ_after_reduction
 
 @memoize
 class Edge(EqualityMixin):
@@ -242,23 +252,23 @@ class Edge(EqualityMixin):
             return result
 
         level = max(self.succ.level, other.succ.level)
-        self_children, self_weight = _determine_children_on_same_level(self, other)
-        other_children, other_weight = _determine_children_on_same_level(other, self)
+        self_children = _determine_children_on_same_level(self, other)
+        other_children = _determine_children_on_same_level(other, self)
 
         assert len(self_children) == len(other_children)
 
         children = tuple([oper(sc, oc) for sc, oc in zip(self_children, other_children)])
+
         min_child_weight = min([child.weight for child in children])
         children = tuple([Edge(weight=child.weight-min_child_weight, succ=child.succ,
                                is_fully_reduced=self.is_fully_reduced) for child in children])
 
-        result_weight = _aggregate_weights(self_weight, other_weight, oper) + min_child_weight
+        result_weight = min_child_weight
         result_succ = Node(level, children, self.is_fully_reduced)
 
         if self.is_fully_reduced:
-            result = _perform_shannon_reduction(result_weight, result_succ, children)
-        else:
-            result = Edge(weight=result_weight, succ=result_succ, is_fully_reduced=False)
+            result_succ = _perform_shannon_reduction(result_succ)
+        result = Edge(weight=result_weight, succ=result_succ, is_fully_reduced=self.is_fully_reduced)
         _log_apply(self, other, oper, result, False)
         return result
 
@@ -273,6 +283,13 @@ class Edge(EqualityMixin):
 
     def __neg__(self):
         return _make_const_evmdd(0, self.is_fully_reduced) - self
+
+    def __pow__(self, other):
+        if not isinstance(other, Integral) or other < 0:
+            raise ValueError("EVMDDs may only be raised to a nonnegative integral power.")
+        if other == 0:
+            return _make_const_evmdd(1, self.is_fully_reduced)
+        return self * (self ** (other-1))
 
     def __str__(self):
         return 'Edge(%s,%s)' % (self.weight, self.succ)
@@ -331,7 +348,7 @@ class Node(EqualityMixin):
         return result
 
     def __str__(self):
-        if self.is_sink_node:
+        if self.is_sink_node():
             return '0'
         children = '[%s]' % (','.join([str(child) for child in self.children]),)
         return 'Node(%s,%s)' % (self.level, children)
@@ -504,6 +521,8 @@ def evaluate(evmdd, valuation, manager):
         assert min([child.weight for child in current_node.children]) == 0
         if current_edge.is_fully_reduced:
             assert all([child.succ.level < current_node.level for child in current_node.children])
+            assert (len(set([child.succ for child in current_node.children])) > 1 or
+                    max([child.weight for child in current_node.children]) > 0) # Shannon
         else:
             assert all([child.succ.level == current_node.level-1
                         for child in current_node.children])
