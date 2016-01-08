@@ -140,7 +140,6 @@ class EvmddVisualizer(object):
             with open(dot_filename, 'w') as dot_file:
                 dot_file.write(gvz)
         except PermissionError as e:
-            print('No permission to write to file %s.' % dot_filename)
             logging.error('EVMDD visualization failed. No permission to write to %s' % dot_filename)
 
     def _call_xdot(self, dot_filename):
@@ -148,8 +147,6 @@ class EvmddVisualizer(object):
         try:
             call(cmd)
         except FileNotFoundError as e:
-            print('Error calling xdot on graphviz file.')
-            print('Skipping visualization.')
             logging.error('Skipped EVMDD visualization due to error calling xdot.')
 
     def _convert_to_svg(self, dot_filename):
@@ -206,8 +203,6 @@ class EvmddVisualizer(object):
                 self._convert_to_svg(dot_filename)
                 self._display_svg_macos(svg_filename)
             except FileNotFoundError as e:
-                print('Error converting DOT file to SVG and displaying using Safari.')
-                print('Skipping visualization.')
                 logging.error('Skipped EVMDD visualization due to dot/Safari issue.')
         else:
             self._call_xdot(dot_filename)

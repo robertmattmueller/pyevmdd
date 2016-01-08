@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 # pyevmdd is an EVMDD Library for Python.
 # Copyright (C) 2016 Robert Mattmüller
 

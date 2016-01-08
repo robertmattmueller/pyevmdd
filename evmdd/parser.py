@@ -35,7 +35,8 @@ def read_function_term(function_term):
     """Read a function term and transform it into an AST.
 
     Args:
-        `function_term` (string): a function term using only :math:`+`, :math:`-`, and :math:`*`.
+        `function_term` (string): a function term using only :math:`+`,
+        :math:`-`, :math:`*`, and :math:`**`.
 
     Returns:
         `AST`: the abstract syntax tree representing function_term.
@@ -67,9 +68,9 @@ def _to_evmdd_rec(node, manager):
 
     Base cases: if the given term is a number or a variable, return the
     corresponding constant or variable |EVMDD|. Recursive cases: if the
-    term is an addition, subtraction, multiplication, or unary negation,
-    recurse into the subexpressions, recursively translate them, and compose
-    the sub-|EVMDDs| accordingly.
+    term is an addition, subtraction, multiplication, power to a natural
+    exponent, or unary negation, recurse into the subexpressions, recursively
+    translate them, and compose the sub-|EVMDDs| accordingly.
 
     Args:
         `node` (AST node): the abstract syntax tree node representing the
@@ -117,7 +118,8 @@ def term_to_evmdd(function_term, **kwargs):
 
     Args:
         `function_term` (string): a function term in Python syntax using only
-        constants, variables, addition, subtraction and multiplication.
+        constants, variables, addition, subtraction exponentiation to natural-
+        numbered powers, and multiplication.
 
         \*\*\ `kwargs`: optionally, the variable names in the desired ordering,
         `var_names` (list of strings), their domain sizes `var_domains`
@@ -135,7 +137,7 @@ def term_to_evmdd(function_term, **kwargs):
 
     Example:
         >>> from .evmdd import evaluate
-        >>> expr = 'A*B*B + C + 2'
+        >>> expr = 'A*B**2 + C + 2'
         >>> var_names = ['A', 'B', 'C']
         >>> var_domains = {'A': 2, 'B': 3, 'C': 2}
         >>> evmdd, manager = term_to_evmdd(

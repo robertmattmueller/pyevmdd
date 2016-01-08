@@ -72,62 +72,28 @@ def _aggregate_weights(weight1, weight2, oper):
         assert oper is Edge.__mul__
         return weight1 * weight2
 
-def _is_terminal_case(edge1, edge2, oper):
-    """Test if `edge1` and `edge2` can be combined with operator `oper`
-    without the need to recursively traverse either of the two |EVMDDs|.
+def _is_terminal_case(edge1, edge2):
+    """Test if `edge1` and `edge2` are both sink edges with constant value.
     """
-    edge1_is_sink = edge1.succ.is_sink_node()
-    edge2_is_sink = edge2.succ.is_sink_node()
-
-    if oper is Edge.__add__ or oper is Edge.__mul__:
-        return edge1_is_sink or edge2_is_sink
-    else:
-        assert oper is Edge.__sub__
-        return edge2_is_sink
+    return edge1.succ.is_sink_node() and edge2.succ.is_sink_node()
 
 def _terminal_value(edge1, edge2, oper, is_fully_reduced):
     """Compute the new |EVMDD| for `edge1 oper edge2` in the terminal case
-    where no recursion is needed.
+    where no more recursion is needed.
 
-    For addition and subtraction, the constant weight of the constant summand
-    can be added to (subtracted from) the edge weight of the other edge, and
-    the subgraphs below the other edge can be preserved.
-
-    For multiplication, both constants are multiplied and the result is used
-    as the weight of a resulting new `Edge` to the sink node.
+    The result is the sink edge with constant value that results from
+    adding/subtracting/multiplying the constant values associated with the
+    two given edges.
 
     All cases are non-destructive, i.e., the old argument |EVMDDs| are
     not modified. Rather, a new |EVMDD| is constructed or, if possible,
     retrieved from a lookup table to avoid duplicates.
     """
-    assert _is_terminal_case(edge1, edge2, oper)
-    if edge1.succ.is_sink_node():
-        sink_edge, potential_non_sink_edge = edge1, edge2
-    else:
-        sink_edge, potential_non_sink_edge = edge2, edge1
-
+    assert _is_terminal_case(edge1, edge2)
     result_weight = _aggregate_weights(edge1.weight, edge2.weight, oper)
+    return _make_const_evmdd(number=result_weight, is_fully_reduced=is_fully_reduced)
 
-    if oper is Edge.__add__ or oper is Edge.__sub__:
-        result_succ = potential_non_sink_edge.succ
-    else:
-        assert oper is Edge.__mul__
-        if potential_non_sink_edge.succ.is_sink_node():
-            result_succ = potential_non_sink_edge.succ
-        else:
-            succ = potential_non_sink_edge.succ
-            scaled_children = tuple([sink_edge * child for child in succ.children])
-
-            result_succ = Node(level=succ.level,
-                               children=scaled_children,
-                               is_fully_reduced=is_fully_reduced)
-
-            if is_fully_reduced:
-                result_succ = _perform_shannon_reduction(result_succ)
-
-    return Edge(weight=result_weight, succ=result_succ, is_fully_reduced=is_fully_reduced)
-
-def _determine_children_on_same_level(edge1, edge2):
+def _align_levels(edge1, edge2):
     """In case one of the |EVMDDs| to which an arithmetic operation is
     applied is not quasi-reduced, it can happen that the two top-most nodes
     of the two |EVMDDs| are on different levels (= represent different
@@ -137,17 +103,13 @@ def _determine_children_on_same_level(edge1, edge2):
     the sub- |EVMDD| are created as the domain size of the skipped variable
     requires. Then, we can call `apply` recursively.
 
-    If we have to locally quasi-reduce an |EVMDD|, then we have to set the
-    weight of the new edges to zero.
+    Generally, the weights of the current edges are pushed down to their
+    respective children and only later again pulled up after aggregation.
     """
     if edge1.succ.level >= edge2.succ.level:
-        modified_weight_children = [
-                Edge(weight=child.weight+edge1.weight,
-                     succ=child.succ,
-                     is_fully_reduced=child.is_fully_reduced) for child in edge1.succ.children]
-        return modified_weight_children
+        return [child+edge1.weight for child in edge1.succ.children]
     else:
-        return len(edge2.succ.children) * tuple([edge1])
+        return len(edge2.succ.children) * [edge1]
 
 def _log_apply(edge1, edge2, oper, result, terminal):
     """Log result of operator application to two edges.
@@ -246,24 +208,20 @@ class Edge(EqualityMixin):
         """
         assert self.is_fully_reduced == other.is_fully_reduced
 
-        if _is_terminal_case(self, other, oper):
+        if _is_terminal_case(self, other):
             result = _terminal_value(self, other, oper, self.is_fully_reduced)
             _log_apply(self, other, oper, result, True)
             return result
 
         level = max(self.succ.level, other.succ.level)
-        self_children = _determine_children_on_same_level(self, other)
-        other_children = _determine_children_on_same_level(other, self)
+        self_children = _align_levels(self, other)
+        other_children = _align_levels(other, self)
 
         assert len(self_children) == len(other_children)
 
-        children = tuple([oper(sc, oc) for sc, oc in zip(self_children, other_children)])
-
-        min_child_weight = min([child.weight for child in children])
-        children = tuple([Edge(weight=child.weight-min_child_weight, succ=child.succ,
-                               is_fully_reduced=self.is_fully_reduced) for child in children])
-
-        result_weight = min_child_weight
+        children = [oper(sc, oc) for sc, oc in zip(self_children, other_children)]
+        result_weight = min([child.weight for child in children])
+        children = tuple([child-result_weight for child in children])
         result_succ = Node(level, children, self.is_fully_reduced)
 
         if self.is_fully_reduced:
@@ -273,10 +231,20 @@ class Edge(EqualityMixin):
         return result
 
     def __add__(self, other):
-        return self._apply(other, Edge.__add__)
+        if isinstance(other, type(self)):
+            return self._apply(other, Edge.__add__)
+        else:
+            assert isinstance(other, Integral)
+            return Edge(weight=self.weight+other, succ=self.succ,
+                        is_fully_reduced=self.is_fully_reduced)
 
     def __sub__(self, other):
-        return self._apply(other, Edge.__sub__)
+        if isinstance(other, type(self)):
+            return self._apply(other, Edge.__sub__)
+        else:
+            assert isinstance(other, Integral)
+            return Edge(weight=self.weight-other, succ=self.succ,
+                        is_fully_reduced=self.is_fully_reduced)
 
     def __mul__(self, other):
         return self._apply(other, Edge.__mul__)
