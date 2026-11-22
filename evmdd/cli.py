@@ -21,63 +21,94 @@
 Command line interface for constructing and visualizing |EVMDDs|.
 """
 
+import argparse
 import logging
-import sys
 
-from .graphviz import EvmddVisualizer
+from .graphviz import EvmddVisualizer, GraphvizWriter
 from .parser import term_to_evmdd
-
-
-def _print_usage():
-    print(
-        'usage:   %s "<function term in Python syntax>"' % (sys.argv[0])
-        + ' ["<variable ordering>" ["<variable domain sizes>"]]'
-    )
-    print('example: %s "A*B*B + C + 2" "A, B, C" "2, 3, 2"' % sys.argv[0])
 
 
 def _parse_comma_separated_list(line):
     return [s.strip() for s in line.split(',')]
 
 
-def _parse_command_line():
-    try:
-        function_term = sys.argv[1]
-    except IndexError:
-        print('ERROR: No function term specified.')
-        _print_usage()
-        sys.exit()
-
-    try:
-        var_names = sys.argv[2]
-        var_names = _parse_comma_separated_list(var_names)
-    except IndexError:
-        print('WARNING: No valid variable ordering specified.')
-        print('         Using lexicographic ordering.')
-        var_names = None
-
-    try:
-        var_domains = sys.argv[3]
-        var_domains = _parse_comma_separated_list(var_domains)
-        assert len(var_names) == len(var_domains)
-        var_domains = {var: int(dom) for var, dom in zip(var_names, var_domains, strict=True)}
-    except IndexError:
-        print('WARNING: No variable domain sizes specified.')
-        print('         Assuming binary domains for all variables.')
-        var_domains = None
-        _print_usage()
-
-    return function_term, var_names, var_domains
-
-
-def main():
-    logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
-    function_term, var_names, var_domains = _parse_command_line()
-    evmdd, manager = term_to_evmdd(
-        function_term, var_names=var_names, var_domains=var_domains, fully_reduced=True
+def _make_argument_parser():
+    parser = argparse.ArgumentParser(
+        prog='evmdd',
+        description='Construct the EVMDD for an arithmetic function term and visualize it.',
+        epilog='example: evmdd "A*B*B + C + 2" "A, B, C" "2, 3, 2"',
     )
-    visualizer = EvmddVisualizer(manager)
-    visualizer.visualize(evmdd)
+    parser.add_argument(
+        'function_term',
+        help='function term in Python syntax using integer constants, variables, +, -, *, and **',
+    )
+    parser.add_argument(
+        'var_names',
+        nargs='?',
+        type=_parse_comma_separated_list,
+        help='comma-separated variable ordering (default: lexicographic)',
+    )
+    parser.add_argument(
+        'var_domains',
+        nargs='?',
+        type=_parse_comma_separated_list,
+        help='comma-separated domain sizes in the same order (default: 2 for all variables)',
+    )
+    parser.add_argument(
+        '--quasi-reduced',
+        action='store_true',
+        help='construct a quasi-reduced instead of a fully reduced EVMDD',
+    )
+    parser.add_argument(
+        '--dot',
+        metavar='FILE',
+        help="write the EVMDD in Graphviz/DOT format to FILE ('-' for stdout) instead of "
+        'displaying it',
+    )
+    return parser
+
+
+def _parse_var_domains(parser, var_names, var_domains):
+    if var_domains is None:
+        return None
+    if len(var_names) != len(var_domains):
+        parser.error(
+            'got %d variable names, but %d domain sizes' % (len(var_names), len(var_domains))
+        )
+    try:
+        return {var: int(dom) for var, dom in zip(var_names, var_domains, strict=True)}
+    except ValueError:
+        parser.error('domain sizes must be integers: %s' % ', '.join(var_domains))
+
+
+def main(argv=None):
+    """Run the command line interface.
+
+    Args:
+        `argv` (list of strings, optional): the command line arguments
+        without the program name (default: ``sys.argv[1:]``).
+    """
+    logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
+    parser = _make_argument_parser()
+    args = parser.parse_args(argv)
+    var_domains = _parse_var_domains(parser, args.var_names, args.var_domains)
+    try:
+        evmdd, manager = term_to_evmdd(
+            args.function_term,
+            var_names=args.var_names,
+            var_domains=var_domains,
+            fully_reduced=not args.quasi_reduced,
+        )
+    except (SyntaxError, ValueError) as e:
+        parser.error(str(e))
+
+    if args.dot == '-':
+        print(GraphvizWriter(manager).evmdd_to_gvz(evmdd))
+    elif args.dot:
+        with open(args.dot, 'w') as dot_file:
+            dot_file.write(GraphvizWriter(manager).evmdd_to_gvz(evmdd) + '\n')
+    else:
+        EvmddVisualizer(manager).visualize(evmdd)
 
 
 if __name__ == '__main__':

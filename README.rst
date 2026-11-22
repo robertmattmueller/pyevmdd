@@ -13,6 +13,9 @@ function term can be constructed and visualized (requires
 
     evmdd "A*B*B + C + 2" "A, B, C" "2, 3, 2"
 
+Use ``--dot FILE`` to write the EVMDD in Graphviz/DOT format instead of
+displaying it, and ``evmdd --help`` for all options.
+
 Development
 ===========
 
