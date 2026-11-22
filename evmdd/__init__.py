@@ -1,8 +1,5 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 # pyevmdd is an EVMDD Library for Python.
-# Copyright (C) 2016 Robert Mattmüller
+# Copyright (C) 2016, 2026 Robert Mattmüller
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,8 +14,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from .evmdd import Edge, Node, EvmddManager, evaluate
+from .evmdd import Edge, EvmddManager, Node, evaluate
+from .graphviz import EvmddVisualizer, GraphvizWriter
 from .parser import collect_variables, read_function_term, term_to_evmdd
-from .graphviz import GraphvizWriter, EvmddVisualizer
 
-__all__ = ['evmdd', 'parser', 'graphviz']
+__all__ = [
+    'Edge',
+    'EvmddManager',
+    'EvmddVisualizer',
+    'GraphvizWriter',
+    'Node',
+    'collect_variables',
+    'evaluate',
+    'read_function_term',
+    'term_to_evmdd',
+]

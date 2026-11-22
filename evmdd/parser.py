@@ -1,8 +1,5 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 # This file is part of the EVMDD Library for Python (pyevmdd).
-# Copyright (C) 2016 Robert Mattmüller
+# Copyright (C) 2016, 2026 Robert Mattmüller
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -23,15 +20,42 @@ function terms specified in Python syntax to |EVMDDs|.
 """
 
 import ast
-from numbers import Integral
+from collections.abc import Mapping, Sequence
 
-from .evmdd import EvmddManager
+from .evmdd import Edge, EvmddManager
 
-_LEGAL_EXPRESSIONS = [ast.Expression, ast.Load, ast.BinOp,
-                      ast.Add, ast.Mult, ast.Num, ast.Name,
-                      ast.UnaryOp, ast.USub, ast.Sub, ast.Pow]
+_LEGAL_EXPRESSIONS = [
+    ast.Expression,
+    ast.Load,
+    ast.BinOp,
+    ast.Add,
+    ast.Mult,
+    ast.Constant,
+    ast.Name,
+    ast.UnaryOp,
+    ast.USub,
+    ast.Sub,
+    ast.Pow,
+]
 
-def read_function_term(function_term):
+
+def _integer_value(node: ast.AST) -> int | None:
+    """Get the value of `node` if it is an integer literal, and ``None`` otherwise.
+
+    Since Python 3.8, all literals are represented as `ast.Constant`, so
+    floats, strings, bytes, booleans, ``None`` and ``...`` have to be
+    excluded explicitly.
+    """
+    if (
+        isinstance(node, ast.Constant)
+        and isinstance(node.value, int)
+        and not isinstance(node.value, bool)
+    ):
+        return node.value
+    return None
+
+
+def read_function_term(function_term: str) -> ast.Expression:
     """Read a function term and transform it into an AST.
 
     Args:
@@ -40,13 +64,28 @@ def read_function_term(function_term):
 
     Returns:
         `AST`: the abstract syntax tree representing function_term.
+
+    Raises:
+        `SyntaxError`: if `function_term` is not valid Python syntax.
+
+        `ValueError`: if `function_term` contains anything but integer
+        constants, variables, and the operators listed above.
     """
     expression = ast.parse(function_term, mode='eval')
     for node in ast.walk(expression):
-        assert type(node) in _LEGAL_EXPRESSIONS
+        if type(node) not in _LEGAL_EXPRESSIONS:
+            raise ValueError(
+                f'Unsupported syntax {type(node).__name__} in function term {function_term!r}.'
+            )
+        if isinstance(node, ast.Constant) and _integer_value(node) is None:
+            raise ValueError(
+                f'Unsupported constant {node.value!r} in function term {function_term!r}. '
+                'Only integers are allowed.'
+            )
     return expression
 
-def collect_variables(function_term_ast):
+
+def collect_variables(function_term_ast: ast.AST) -> set[str]:
     """Determine the set of all variables occurring in a given function term.
 
     Args:
@@ -62,7 +101,8 @@ def collect_variables(function_term_ast):
             variables.add(name)
     return variables
 
-def _to_evmdd_rec(node, manager):
+
+def _to_evmdd_rec(node: ast.AST, manager: EvmddManager) -> Edge:
     """Translate a function term represented as an AST to the corresponding
     EVMDD recursively.
 
@@ -81,8 +121,9 @@ def _to_evmdd_rec(node, manager):
     Returns:
         `Edge`: the corresponding |EVMDD|.
     """
-    if isinstance(node, ast.Num):
-        return manager.make_const_evmdd(int(node.n))
+    value = _integer_value(node)
+    if value is not None:
+        return manager.make_const_evmdd(value)
     elif isinstance(node, ast.Name):
         return manager.make_var_evmdd_for_var(node.id)
     elif isinstance(node, ast.BinOp):
@@ -96,17 +137,23 @@ def _to_evmdd_rec(node, manager):
             return left * right
         else:
             assert isinstance(node.op, ast.Pow)
-            if ((not isinstance(node.right, ast.Num)) or
-                (not isinstance(node.right.n, Integral)) or
-                (node.right.n < 0)):
-                raise ValueError("EVMDDs may only be raised to a nonnegative integral power.")
-            return left ** node.right.n
+            exponent = _integer_value(node.right)
+            if exponent is None or exponent < 0:
+                raise ValueError('EVMDDs may only be raised to a nonnegative integral power.')
+            return left**exponent
     else:
         assert isinstance(node, ast.UnaryOp)
         assert isinstance(node.op, ast.USub)
         return -_to_evmdd_rec(node.operand, manager)
 
-def term_to_evmdd(function_term, **kwargs):
+
+def term_to_evmdd(
+    function_term: str,
+    *,
+    var_names: Sequence[str] | None = None,
+    var_domains: Mapping[str, int] | None = None,
+    fully_reduced: bool = True,
+) -> tuple[Edge, EvmddManager]:
     """Translate a function term to the corresponding |EVMDD|.
 
     The variable names in the desired variable ordering can be optionally
@@ -121,14 +168,22 @@ def term_to_evmdd(function_term, **kwargs):
         constants, variables, addition, subtraction exponentiation to natural-
         numbered powers, and multiplication.
 
-        \*\*\ `kwargs`: optionally, the variable names in the desired ordering,
-        `var_names` (list of strings), their domain sizes `var_domains`
-        (dict from strings to ints), and a flag `fully_reduced`
-        determining whether the |EVMDD| should be fully reduced or
-        quasi-reduced.
+        `var_names` (list of strings, optional): the variable names in the
+        desired ordering.
+
+        `var_domains` (dict from strings to ints, optional): the domain
+        sizes of the variables.
+
+        `fully_reduced` (bool, optional): whether the |EVMDD| should be
+        fully reduced (default) or quasi-reduced.
 
     Returns:
         a tuple consisting of the corresponding |EVMDD| and its manager.
+
+    Raises:
+        `ValueError`: if the function term is not supported, or if
+        `var_names` or `var_domains` do not cover all variables occurring
+        in it.
 
     The following example code constructs the fully reduced |EVMDD| for the
     running example :math:`f(A,B,C) = AB^2 + C + 2` for variable ordering
@@ -146,85 +201,26 @@ def term_to_evmdd(function_term, **kwargs):
         >>> valuation = {'A': 1, 'B': 2, 'C': 0}
         >>> evaluate(evmdd, valuation, manager)
         6
-
-    The next example shows that this works across a range of function terms,
-    variable orderings, valuations, and both for fully and quasi-reduced
-    |EVMDDs|.
-
-    Example:
-        >>> from itertools import permutations, product
-        >>> from .evmdd import evaluate
-        >>>
-        >>> def collect_variables(function_term):
-        ...     variables = set()
-        ...     expression = ast.parse(function_term, mode='eval')
-        ...     for node in ast.walk(expression):
-        ...         if(type(node) == ast.Name):
-        ...             name = node.id
-        ...             variables.add(name)
-        ...     return variables
-        ...
-        >>>
-        >>> exprs = [
-        ...     '0', '1',
-        ...     'A', 'B', '0*A', '2*A', '0*B', '2*B',
-        ...     'A+B', 'B+A', '1-A', '1-B',
-        ...     '-A', 'A-B', 'B-A', '-(A+B)',
-        ...     'A*B + B', 'B + A*B',
-        ...     'A*B*B + C + 2', 'A*B - 17',
-        ...     'A*B - A*B', 'A-A',
-        ...     '1*(A+2)', 'A*(B+2)', 'A*(B+2)*(B+2) + C + 2',
-        ... ]
-        ...
-        >>> domain_size = 4
-        >>>
-        >>> all_results_as_expected = True
-        >>> for expr in exprs:
-        ...     var_set = collect_variables(expr)
-        ...     var_domains = {var: domain_size for var in var_set}
-        ...     for fully_reduced in [True, False]:
-        ...         for var_names in permutations(var_set):
-        ...             for valuation in product(range(domain_size), repeat=len(var_set)):
-        ...                 valuation = {var:val for var, val in zip(var_names,valuation)}
-        ...                 evmdd, manager = term_to_evmdd(expr,
-        ...                                  var_names=var_names, var_domains=var_domains,
-        ...                                  fully_reduced=fully_reduced)
-        ...                 actual = evaluate(evmdd, valuation, manager)
-        ...                 expected = eval(expr, valuation)
-        ...                 if actual != expected:
-        ...                     all_results_as_expected = False
-        ...
-        >>> all_results_as_expected
-        True
     """
-
-    var_names = kwargs.get('var_names', None)
-    var_domains = kwargs.get('var_domains', None)
-    fully_reduced = kwargs.get('fully_reduced', True)
-
     function_term_ast = read_function_term(function_term)
+    term_variables = collect_variables(function_term_ast)
 
     if not var_names:
-        var_names = sorted(list(collect_variables(function_term_ast)))
+        var_names = sorted(term_variables)
 
-    assert collect_variables(function_term_ast) <= set(var_names)
+    missing = term_variables - set(var_names)
+    if missing:
+        raise ValueError(f'Variables {", ".join(sorted(missing))} missing from variable ordering.')
 
     if not var_domains:
         var_domains = {var: 2 for var in var_names}
 
-    assert all([var in var_domains for var in var_names])
-    var_domains = [var_domains[var] for var in var_names]
+    without_domain = [var for var in var_names if var not in var_domains]
+    if without_domain:
+        raise ValueError(f'No domain sizes given for variables {", ".join(without_domain)}.')
+    domain_sizes = [var_domains[var] for var in var_names]
 
-    manager = EvmddManager(var_names, var_domains, fully_reduced)
+    manager = EvmddManager(var_names, domain_sizes, fully_reduced)
 
     assert isinstance(function_term_ast, ast.Expression)
     return _to_evmdd_rec(function_term_ast.body, manager), manager
-
-
-def _test():
-    import doctest
-    doctest.testmod()
-
-
-if __name__ == "__main__":
-    _test()

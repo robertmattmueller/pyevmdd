@@ -101,9 +101,11 @@ far, the following features are supported (but unstable):
   visualization.
 * Function evaluation.
 * Arithmetic operations :math:`+` (addition), :math:`-` (subtraction, unary
-  negation), and :math:`*` (multiplication) on |EVMDDs|.
+  negation), :math:`*` (multiplication), and ``**`` (exponentiation with
+  nonnegative integer exponents) on |EVMDDs|.
 * Choice between fully reduced and quasi-reduced |EVMDDs|.
 * Input of arithmetic functions in Python syntax.
+* A command line interface for constructing and visualizing |EVMDDs|.
 
 If you are looking for an excellent, mature, efficient, and general |EVMDD|
 library that you can use in a serious application, we strongly recommend you to
@@ -141,13 +143,17 @@ The sources can be cloned from the following git repository:
 
   https://github.com/robertmattmueller/pyevmdd
 
+The library can be installed directly from there::
+
+  pip install git+https://github.com/robertmattmueller/pyevmdd
+
 This library has the following requirements and dependencies:
 
-* It requires Python 3.
+* It requires Python 3.10 or newer.
 * For |EVMDD| visualization, it requires Graphviz_
     - Additionally, under Linux, it requires ``xdot`` to display |EVMDDs|.
-    - Under Mac OS X, |EVMDDs| are displayed in the Safari browser after ``dot``
-      conversion to SVG.
+    - Under macOS, |EVMDDs| are displayed in the default SVG viewer after
+      ``dot`` conversion to SVG.
 * Several planned features (variable orderings, |EVMDD| based action
   compilation, evaluation of relaxed/abstract states), will probably make use
   of the `NetworkX <http://networkx.github.io/>`_ library.
@@ -163,7 +169,6 @@ Let us step through a small script that makes use of the interesting |pyevmdd|
 features::
 
   #!/usr/bin/env python3
-  # -*- coding: utf-8 -*-
 
   from evmdd import term_to_evmdd, evaluate, EvmddVisualizer
 
@@ -189,8 +194,9 @@ features::
 
 To construct an |EVMDD|, first, we give the function term to be represented as
 an |EVMDD|, for instance :math:`AB^2 + C + 2`. The term must be given in Python
-syntax using only variable names, constants, addition, subtraction, and
-multiplication. Hence, we have to write::
+syntax using only variable names, integer constants, addition, subtraction,
+multiplication, and exponentiation with nonnegative integer exponents. Hence,
+we can write::
 
   function_term = 'A*B*B + C + 2'
 
@@ -250,17 +256,32 @@ that purpose::
   visualizer.visualize(evmdd)
 
 Depending on OS details, this visualizes the |EVMDD| using Graphviz and either
-``xdot`` display or conversion to SVG and web browser display. Figure
-:ref:`evmdd_figure` above was produced this way.
+``xdot`` display or conversion to SVG and display in the default SVG viewer.
+Figure :ref:`evmdd_figure` above was produced this way.
 
 .. note::
 
    The temporary files needed for visualization are *not* deleted after
-   use. DOT and SVG files are stored in ``/tmp/evmdd-gvz-<UUID>.dot`` and
-   ``/tmp/evmdd-gvz-<UUID>.dot.svg``, respectively. Optionally, a file prefix
-   can be given as a named argument ``file_prefix`` to ``visualize``. The
-   default corresponds to ``visualize(evmdd,
-   file_prefix='/tmp/evmdd-gvz-<UUID>')``.
+   use. By default, DOT and SVG files are stored in the system's temporary
+   directory as ``evmdd-gvz-<random>.dot`` and ``evmdd-gvz-<random>.dot.svg``,
+   respectively. Optionally, a file prefix can be given as a named argument
+   ``file_prefix`` to ``visualize``; e.g., ``visualize(evmdd,
+   file_prefix='example')`` writes ``example.dot`` and ``example.dot.svg``.
+
+
+Command Line Interface
+~~~~~~~~~~~~~~~~~~~~~~
+
+The library also installs a command ``evmdd`` that constructs and visualizes
+the |EVMDD| for a function term, given optionally a variable ordering and
+domain sizes::
+
+  evmdd "A*B*B + C + 2" "A, B, C" "2, 3, 2"
+
+With ``--dot FILE``, the |EVMDD| is written to ``FILE`` in Graphviz/DOT format
+instead of being displayed (``--dot -`` writes to standard output), and with
+``--quasi-reduced``, a quasi-reduced instead of a fully reduced |EVMDD| is
+constructed. ``evmdd --help`` lists all options.
 
 
 Planned Features and Applications
@@ -310,7 +331,7 @@ Visualization/Output Module
 License
 -------
 
-Copyright (C) 2016 Robert Mattmüller
+Copyright (C) 2016, 2026 Robert Mattmüller
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by

@@ -1,8 +1,5 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 # This file is part of the EVMDD Library for Python (pyevmdd).
-# Copyright (C) 2016 Robert Mattmüller
+# Copyright (C) 2016, 2026 Robert Mattmüller
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,12 +18,19 @@
 Graphviz output and display of |EVMDDs|.
 """
 
-from itertools import groupby
-from subprocess import call
-from sys import platform
 import logging
+import os
+import subprocess
+import tempfile
+from collections.abc import Iterable
+from itertools import groupby
+from operator import attrgetter
+from sys import platform
 
-class GraphvizWriter(object):
+from .evmdd import Edge, EvmddManager, Node
+
+
+class GraphvizWriter:
     """Helper class that writes |EVMDDs| to strings in Graphviz/DOT format."""
 
     _root_node_gvz_tmpl = '%s [style=invis];'
@@ -40,37 +44,37 @@ class GraphvizWriter(object):
     _var_node_name_tmpl = '"s%s[level=%s]"'
     _weight_node_name_tmpl = '"s%s[level=%s]=%s"'
 
-    def __init__(self, manager):
+    def __init__(self, manager: EvmddManager) -> None:
         self._manager = manager
-        self._index = None
+        self._index: dict[Node, int] = {}
 
-    def _root_node_gvz(self, var_node_name):
+    def _root_node_gvz(self, var_node_name: str) -> str:
         return self._root_node_gvz_tmpl % var_node_name
 
-    def _var_node_gvz(self, var_node_name, var_name):
+    def _var_node_gvz(self, var_node_name: str, var_name: str) -> str:
         return self._var_node_gvz_tmpl % (var_node_name, var_name)
 
-    def _sink_node_gvz(self, var_node_name):
+    def _sink_node_gvz(self, var_node_name: str) -> str:
         return self._sink_node_gvz_tmpl % var_node_name
 
-    def _weight_node_gvz(self, weight_node_name, weight):
+    def _weight_node_gvz(self, weight_node_name: str, weight: int) -> str:
         return self._weight_node_gvz_tmpl % (weight_node_name, weight)
 
-    def _var_to_weight_edge_gvz(self, var_node_name, weight_node_name, domain_idx):
-        return (self._var_to_weight_edge_gvz_tmpl %
-                (var_node_name, weight_node_name, domain_idx))
+    def _var_to_weight_edge_gvz(
+        self, var_node_name: str, weight_node_name: str, domain_idx: int | str
+    ) -> str:
+        return self._var_to_weight_edge_gvz_tmpl % (var_node_name, weight_node_name, domain_idx)
 
-    def _weight_to_var_edge_gvz(self, weight_node_name, succ_var_node_name):
-        return (self._weight_to_var_edge_gvz_tmpl %
-                (weight_node_name, succ_var_node_name))
+    def _weight_to_var_edge_gvz(self, weight_node_name: str, succ_var_node_name: str) -> str:
+        return self._weight_to_var_edge_gvz_tmpl % (weight_node_name, succ_var_node_name)
 
-    def _var_node_name(self, node):
+    def _var_node_name(self, node: Node) -> str:
         return self._var_node_name_tmpl % (self._index[node], node.level)
 
-    def _weight_node_name(self, node, domain_idx):
+    def _weight_node_name(self, node: Node, domain_idx: int) -> str:
         return self._weight_node_name_tmpl % (self._index[node], node.level, domain_idx)
 
-    def _root_edge_to_gvz(self, evmdd):
+    def _root_edge_to_gvz(self, evmdd: Edge) -> list[str]:
         var_node_name = 'dummyNode'
         weight_node_name = 'constantWeight'
         var_node = self._root_node_gvz(var_node_name)
@@ -80,7 +84,7 @@ class GraphvizWriter(object):
         weight_to_var_edge = self._weight_to_var_edge_gvz(weight_node_name, succ_var_node_name)
         return [var_node, weight_node, var_to_weight_edge, weight_to_var_edge]
 
-    def _node_to_gvz(self, node):
+    def _node_to_gvz(self, node: Node) -> list[str]:
         var_node_name = self._var_node_name(node)
         if node.is_sink_node():
             return [self._sink_node_gvz(var_node_name)]
@@ -90,18 +94,19 @@ class GraphvizWriter(object):
         for domain_idx, child in enumerate(node.children):
             weight_node_name = self._weight_node_name(node, domain_idx)
             weight_node = self._weight_node_gvz(weight_node_name, child.weight)
-            var_to_weight_edge = self._var_to_weight_edge_gvz(var_node_name,
-                                                              weight_node_name, domain_idx)
+            var_to_weight_edge = self._var_to_weight_edge_gvz(
+                var_node_name, weight_node_name, domain_idx
+            )
             succ_var_node_name = self._var_node_name(child.succ)
             weight_to_var_edge = self._weight_to_var_edge_gvz(weight_node_name, succ_var_node_name)
             result.extend([weight_node, var_to_weight_edge, weight_to_var_edge])
         return result
 
-    def _node_rank_to_gvz(self, rank):
-        rank = ';'.join([self._var_node_name(node) for node in rank])
-        return '{rank = same; %s;}' % rank
+    def _node_rank_to_gvz(self, rank: Iterable[Node]) -> str:
+        node_names = ';'.join([self._var_node_name(node) for node in rank])
+        return f'{{rank = same; {node_names};}}'
 
-    def evmdd_to_gvz(self, evmdd):
+    def evmdd_to_gvz(self, evmdd: Edge) -> str:
         """Translate a given |EVMDD| to Graphviz format.
 
         Args:
@@ -110,9 +115,8 @@ class GraphvizWriter(object):
         Returns:
             `string`: an encoding of the |EVMDD| in Graphviz/DOT format.
         """
-        nodes = evmdd.nodes()
-        sorting_fn = lambda node: node.level
-        nodes = sorted(nodes, key=sorting_fn)
+        sorting_fn = attrgetter('level')
+        nodes = sorted(evmdd.nodes(), key=sorting_fn)
 
         self._index = {node: idx for idx, node in enumerate(nodes)}
         lines = ['digraph G {']
@@ -125,54 +129,32 @@ class GraphvizWriter(object):
         return '\n'.join(lines)
 
 
-class EvmddVisualizer(object):
-    """Helper class that displays |EVMDDs| on the screen.
-    """
+class EvmddVisualizer:
+    """Helper class that displays |EVMDDs| on the screen."""
 
-    def __init__(self, manager):
+    def __init__(self, manager: EvmddManager) -> None:
         self._gvz_writer = GraphvizWriter(manager)
 
-    def _encode_in_gvz_format(self, evmdd):
+    def _encode_in_gvz_format(self, evmdd: Edge) -> str:
         return self._gvz_writer.evmdd_to_gvz(evmdd)
 
-    def _write_to_tmp_file(self, gvz, dot_filename):
+    def _run(self, cmd: list[str]) -> bool:
+        """Run an external command. Return true iff it succeeded."""
         try:
-            with open(dot_filename, 'w') as dot_file:
-                dot_file.write(gvz)
-        except PermissionError as e:
-            logging.error('EVMDD visualization failed. No permission to write to %s' % dot_filename)
+            subprocess.run(cmd, check=True)
+        except (OSError, subprocess.CalledProcessError) as e:
+            logging.error('Skipped EVMDD visualization due to error calling %s: %s', cmd[0], e)
+            return False
+        return True
 
-    def _call_xdot(self, dot_filename):
-        cmd = ['xdot', dot_filename]
-        try:
-            call(cmd)
-        except FileNotFoundError as e:
-            logging.error('Skipped EVMDD visualization due to error calling xdot.')
-
-    def _convert_to_svg(self, dot_filename):
-        cmd = ['dot', '-Tsvg', '-O', dot_filename]
-        call(cmd)
-
-    def _display_svg_macos(self, svg_filename):
-        svg_fqdn = 'file://%s' % svg_filename
-        cmd = ['open', '-a', 'safari', svg_fqdn]
-        call(cmd)
-
-    def _remove_tmp_file(self, filename):
-        cmd = ['rm', filename]
-        try:
-            call(cmd)
-        except FileNotFoundError as e:
-            logging.warning('Could not delete temp file %s.' % filename)
-
-    def visualize(self, evmdd, file_prefix=None):
+    def visualize(self, evmdd: Edge, file_prefix: str | None = None) -> None:
         """Visualize a given |EVMDD|.
 
         The given |EVMDD| is first exported in Graphviz/DOT syntax and
-        written to a temporary DOT file. Then, depending on the OS, the
-        DOT file is either displayed using `xdot` (under Linux), or converted
-        to SVG using `dot` and subsequently openend in a Browser (Safari,
-        under Mac OS X).
+        written to a DOT file. Then, depending on the OS, the DOT file is
+        either displayed using `xdot` (under Linux), or converted to SVG
+        using `dot` and subsequently opened in the default SVG viewer
+        (under macOS).
 
         In both cases, we assume that Graphviz is installed.
 
@@ -182,7 +164,8 @@ class EvmddVisualizer(object):
             `evmdd` (Edge): the |EVMDD| to be visualized.
 
             `file_prefix` (string, optional): path and file name of dot file to
-            write to (``/tmp/evmdd-gvz-UUID`` by default)
+            write to, without the ``.dot`` extension (a new temporary file
+            ``evmdd-gvz-*.dot`` by default)
 
         Returns:
             `None`
@@ -190,19 +173,21 @@ class EvmddVisualizer(object):
         Side effect:
             visualization of the given |EVMDD|.
         """
-        if not file_prefix:
-            import uuid
-            rnd = uuid.uuid4()
-            file_prefix = '/tmp/evmdd-gvz-%s' % rnd
-        dot_filename = file_prefix + '.dot'
-        svg_filename = file_prefix + '.dot.svg'
-        gvz = self._encode_in_gvz_format(evmdd)
-        self._write_to_tmp_file(gvz, dot_filename)
-        if platform == 'darwin':
-            try:
-                self._convert_to_svg(dot_filename)
-                self._display_svg_macos(svg_filename)
-            except FileNotFoundError as e:
-                logging.error('Skipped EVMDD visualization due to dot/Safari issue.')
+        if file_prefix:
+            dot_filename = file_prefix + '.dot'
         else:
-            self._call_xdot(dot_filename)
+            fd, dot_filename = tempfile.mkstemp(prefix='evmdd-gvz-', suffix='.dot')
+            os.close(fd)
+        svg_filename = dot_filename + '.svg'
+        gvz = self._encode_in_gvz_format(evmdd)
+        try:
+            with open(dot_filename, 'w') as dot_file:
+                dot_file.write(gvz)
+        except OSError as e:
+            logging.error('EVMDD visualization failed. Could not write to %s: %s', dot_filename, e)
+            return
+        if platform == 'darwin':
+            if self._run(['dot', '-Tsvg', '-O', dot_filename]):
+                self._run(['open', svg_filename])
+        else:
+            self._run(['xdot', dot_filename])

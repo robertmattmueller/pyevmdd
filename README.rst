@@ -4,10 +4,33 @@ EVMDD Library for Python (pyevmdd)
 The purpose of this small project is to provide a lightweight, pure Python
 EVMDD library. It is still in a very early stage of development.
 
+Usage
+=====
+
+pyevmdd requires Python 3.10 or newer. After installation, an EVMDD for a
+function term can be constructed and visualized (requires
+`Graphviz <https://graphviz.org/>`_) from the command line::
+
+    evmdd "A*B*B + C + 2" "A, B, C" "2, 3, 2"
+
+Use ``--dot FILE`` to write the EVMDD in Graphviz/DOT format instead of
+displaying it, and ``evmdd --help`` for all options.
+
+Development
+===========
+
+Development uses `uv <https://docs.astral.sh/uv/>`_::
+
+    uv run pytest
+    uv run ruff check
+    uv run ruff format
+    uv run mypy
+    uv run --group docs sphinx-build -W -b html sphinx sphinx/_build/html
+
 Copyright
 =========
 
-Copyright (C) 2016 Robert Mattmüller
+Copyright (C) 2016, 2026 Robert Mattmüller
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
