@@ -91,3 +91,15 @@ def test_unused_evmdds_are_garbage_collected():
     gc.collect()
     assert edge_ref() is None
     assert node_ref() is None
+
+
+def test_shared_sub_evmdds_are_traversed_once():
+    # A chain of nodes where each node has two edges to the same successor:
+    # there are 2**depth paths, but only depth + 1 nodes.
+    depth = 64
+    edge = Edge(0, Node(0, []), is_fully_reduced=False)
+    for level in range(1, depth + 1):
+        node = Node(level, [edge, edge + 1], is_fully_reduced=False)
+        edge = Edge(0, node, is_fully_reduced=False)
+    assert edge.num_nodes() == depth + 1
+    assert edge.num_edges() == 2 * depth + 1

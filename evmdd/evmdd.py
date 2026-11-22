@@ -363,10 +363,18 @@ class Node:
         return len(self.children) == 0
 
     def nodes(self):
-        """Get all nodes in the (sub-) |EVMDD| rooted at this node."""
-        result = set([self])
-        for child in self.children:
-            result.update(child.nodes())
+        """Get all nodes in the (sub-) |EVMDD| rooted at this node.
+
+        Shared sub-|EVMDDs| are only traversed once.
+        """
+        result = {self}
+        stack = [self]
+        while stack:
+            node = stack.pop()
+            for child in node.children:
+                if child.succ not in result:
+                    result.add(child.succ)
+                    stack.append(child.succ)
         return result
 
     def __str__(self):
