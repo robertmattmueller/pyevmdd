@@ -22,9 +22,11 @@ Graphviz output and display of |EVMDDs|.
 """
 
 import logging
+import os
+import subprocess
+import tempfile
 from itertools import groupby
 from operator import attrgetter
-from subprocess import call
 from sys import platform
 
 
@@ -135,44 +137,23 @@ class EvmddVisualizer(object):
     def _encode_in_gvz_format(self, evmdd):
         return self._gvz_writer.evmdd_to_gvz(evmdd)
 
-    def _write_to_tmp_file(self, gvz, dot_filename):
+    def _run(self, cmd):
+        """Run an external command. Return true iff it succeeded."""
         try:
-            with open(dot_filename, 'w') as dot_file:
-                dot_file.write(gvz)
-        except PermissionError:
-            logging.error('EVMDD visualization failed. No permission to write to %s' % dot_filename)
-
-    def _call_xdot(self, dot_filename):
-        cmd = ['xdot', dot_filename]
-        try:
-            call(cmd)
-        except FileNotFoundError:
-            logging.error('Skipped EVMDD visualization due to error calling xdot.')
-
-    def _convert_to_svg(self, dot_filename):
-        cmd = ['dot', '-Tsvg', '-O', dot_filename]
-        call(cmd)
-
-    def _display_svg_macos(self, svg_filename):
-        svg_fqdn = 'file://%s' % svg_filename
-        cmd = ['open', '-a', 'safari', svg_fqdn]
-        call(cmd)
-
-    def _remove_tmp_file(self, filename):
-        cmd = ['rm', filename]
-        try:
-            call(cmd)
-        except FileNotFoundError:
-            logging.warning('Could not delete temp file %s.' % filename)
+            subprocess.run(cmd, check=True)
+        except (OSError, subprocess.CalledProcessError) as e:
+            logging.error('Skipped EVMDD visualization due to error calling %s: %s', cmd[0], e)
+            return False
+        return True
 
     def visualize(self, evmdd, file_prefix=None):
         """Visualize a given |EVMDD|.
 
         The given |EVMDD| is first exported in Graphviz/DOT syntax and
-        written to a temporary DOT file. Then, depending on the OS, the
-        DOT file is either displayed using `xdot` (under Linux), or converted
-        to SVG using `dot` and subsequently openend in a Browser (Safari,
-        under Mac OS X).
+        written to a DOT file. Then, depending on the OS, the DOT file is
+        either displayed using `xdot` (under Linux), or converted to SVG
+        using `dot` and subsequently opened in the default SVG viewer
+        (under macOS).
 
         In both cases, we assume that Graphviz is installed.
 
@@ -182,7 +163,8 @@ class EvmddVisualizer(object):
             `evmdd` (Edge): the |EVMDD| to be visualized.
 
             `file_prefix` (string, optional): path and file name of dot file to
-            write to (``/tmp/evmdd-gvz-UUID`` by default)
+            write to, without the ``.dot`` extension (a new temporary file
+            ``evmdd-gvz-*.dot`` by default)
 
         Returns:
             `None`
@@ -190,20 +172,21 @@ class EvmddVisualizer(object):
         Side effect:
             visualization of the given |EVMDD|.
         """
-        if not file_prefix:
-            import uuid
-
-            rnd = uuid.uuid4()
-            file_prefix = '/tmp/evmdd-gvz-%s' % rnd
-        dot_filename = file_prefix + '.dot'
-        svg_filename = file_prefix + '.dot.svg'
-        gvz = self._encode_in_gvz_format(evmdd)
-        self._write_to_tmp_file(gvz, dot_filename)
-        if platform == 'darwin':
-            try:
-                self._convert_to_svg(dot_filename)
-                self._display_svg_macos(svg_filename)
-            except FileNotFoundError:
-                logging.error('Skipped EVMDD visualization due to dot/Safari issue.')
+        if file_prefix:
+            dot_filename = file_prefix + '.dot'
         else:
-            self._call_xdot(dot_filename)
+            fd, dot_filename = tempfile.mkstemp(prefix='evmdd-gvz-', suffix='.dot')
+            os.close(fd)
+        svg_filename = dot_filename + '.svg'
+        gvz = self._encode_in_gvz_format(evmdd)
+        try:
+            with open(dot_filename, 'w') as dot_file:
+                dot_file.write(gvz)
+        except OSError as e:
+            logging.error('EVMDD visualization failed. Could not write to %s: %s', dot_filename, e)
+            return
+        if platform == 'darwin':
+            if self._run(['dot', '-Tsvg', '-O', dot_filename]):
+                self._run(['open', svg_filename])
+        else:
+            self._run(['xdot', dot_filename])
