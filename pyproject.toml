@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyevmdd"
-version = "0.1.dev1"
+version = "0.2.dev0"
 description = "EVMDD Library for Python"
 readme = "README.rst"
 requires-python = ">=3.10"
