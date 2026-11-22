@@ -32,7 +32,7 @@ supposed to deal with fully reduced (if true) or quasi-reduced (if false)
 import logging
 from numbers import Integral
 
-from .util import memoize, EqualityMixin
+from .util import EqualityMixin, memoize
 
 _DEFAULT_IS_FULLY_REDUCED = True
 
@@ -219,14 +219,15 @@ class Edge(EqualityMixin):
 
         assert len(self_children) == len(other_children)
 
-        children = [oper(sc, oc) for sc, oc in zip(self_children, other_children)]
+        children = [oper(sc, oc) for sc, oc in zip(self_children, other_children, strict=True)]
         result_weight = min([child.weight for child in children])
         children = tuple([child-result_weight for child in children])
         result_succ = Node(level, children, self.is_fully_reduced)
 
         if self.is_fully_reduced:
             result_succ = _perform_shannon_reduction(result_succ)
-        result = Edge(weight=result_weight, succ=result_succ, is_fully_reduced=self.is_fully_reduced)
+        result = Edge(weight=result_weight, succ=result_succ,
+                      is_fully_reduced=self.is_fully_reduced)
         _log_apply(self, other, oper, result, False)
         return result
 

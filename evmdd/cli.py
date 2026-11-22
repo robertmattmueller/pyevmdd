@@ -21,11 +21,12 @@
 Command line interface for constructing and visualizing |EVMDDs|.
 """
 
-import sys
 import logging
+import sys
 
 from .graphviz import EvmddVisualizer
 from .parser import term_to_evmdd
+
 
 def _print_usage():
     print('usage:   %s "<function term in Python syntax>"' % (
@@ -55,7 +56,7 @@ def _parse_command_line():
         var_domains = sys.argv[3]
         var_domains = _parse_comma_separated_list(var_domains)
         assert len(var_names) == len(var_domains)
-        var_domains = {var: int(dom) for var, dom in zip(var_names, var_domains)}
+        var_domains = {var: int(dom) for var, dom in zip(var_names, var_domains, strict=True)}
     except IndexError:
         print('WARNING: No variable domain sizes specified.')
         print('         Assuming binary domains for all variables.')

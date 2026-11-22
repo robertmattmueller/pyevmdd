@@ -22,6 +22,7 @@
 
 from functools import wraps
 
+
 def memoize(obj):
     """Memoizes an object.
 

@@ -49,7 +49,7 @@ def test_evmdd_agrees_with_python_eval(expr, fully_reduced):
                                        var_domains=var_domains,
                                        fully_reduced=fully_reduced)
         for values in product(range(DOMAIN_SIZE), repeat=len(var_names)):
-            valuation = dict(zip(var_names, values))
+            valuation = dict(zip(var_names, values, strict=True))
             assert evaluate(evmdd, valuation, manager) == eval(expr, valuation)
 
 

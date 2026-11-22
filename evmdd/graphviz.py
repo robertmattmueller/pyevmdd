@@ -21,10 +21,12 @@
 Graphviz output and display of |EVMDDs|.
 """
 
+import logging
 from itertools import groupby
+from operator import attrgetter
 from subprocess import call
 from sys import platform
-import logging
+
 
 class GraphvizWriter(object):
     """Helper class that writes |EVMDDs| to strings in Graphviz/DOT format."""
@@ -111,7 +113,7 @@ class GraphvizWriter(object):
             `string`: an encoding of the |EVMDD| in Graphviz/DOT format.
         """
         nodes = evmdd.nodes()
-        sorting_fn = lambda node: node.level
+        sorting_fn = attrgetter('level')
         nodes = sorted(nodes, key=sorting_fn)
 
         self._index = {node: idx for idx, node in enumerate(nodes)}
@@ -139,14 +141,14 @@ class EvmddVisualizer(object):
         try:
             with open(dot_filename, 'w') as dot_file:
                 dot_file.write(gvz)
-        except PermissionError as e:
+        except PermissionError:
             logging.error('EVMDD visualization failed. No permission to write to %s' % dot_filename)
 
     def _call_xdot(self, dot_filename):
         cmd = ['xdot', dot_filename]
         try:
             call(cmd)
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             logging.error('Skipped EVMDD visualization due to error calling xdot.')
 
     def _convert_to_svg(self, dot_filename):
@@ -162,7 +164,7 @@ class EvmddVisualizer(object):
         cmd = ['rm', filename]
         try:
             call(cmd)
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             logging.warning('Could not delete temp file %s.' % filename)
 
     def visualize(self, evmdd, file_prefix=None):
@@ -202,7 +204,7 @@ class EvmddVisualizer(object):
             try:
                 self._convert_to_svg(dot_filename)
                 self._display_svg_macos(svg_filename)
-            except FileNotFoundError as e:
+            except FileNotFoundError:
                 logging.error('Skipped EVMDD visualization due to dot/Safari issue.')
         else:
             self._call_xdot(dot_filename)
