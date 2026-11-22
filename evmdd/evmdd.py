@@ -316,7 +316,9 @@ class Edge:
         if not isinstance(other, Integral) or other < 0:
             raise ValueError('EVMDDs may only be raised to a nonnegative integral power.')
         if other == 0:
-            return _make_const_evmdd(1, self.is_fully_reduced)
+            # Not simply the constant 1: in the quasi-reduced case, the result
+            # has to branch over the same variables as `self`.
+            return self - self + 1
         return self * (self ** (other - 1))
 
     def __str__(self) -> str:
@@ -520,8 +522,10 @@ class EvmddManager:
     def make_const_evmdd(self, number: int) -> Edge:
         """Construct an |EVMDD| representing a given constant number.
 
-        This is the |EVMDD| with a single edge immediately leading to the sink
-        node, labeled with the given constant as its edge weight.
+        In the fully reduced case, this is the |EVMDD| with a single edge
+        immediately leading to the sink node, labeled with the given constant
+        as its edge weight. In the quasi-reduced case, the edge leads to a
+        chain of nodes branching over all variables with zero-weight edges.
 
         Args:
             `number` (int): a constant arithmetic function.
@@ -529,7 +533,26 @@ class EvmddManager:
         Returns:
             Edge: the |EVMDD| representing the given number.
         """
-        return _make_const_evmdd(number, self._fully_reduced)
+        const_evmdd = _make_const_evmdd(number, self._fully_reduced)
+        return self._extend_to_level(const_evmdd, len(self._var_names))
+
+    def _extend_to_level(self, edge: Edge, level: int) -> Edge:
+        """In the quasi-reduced case, insert nodes above `edge.succ` that
+        branch over all variables up to the given `level` without changing
+        the represented function. In the fully reduced case, return `edge`.
+
+        Each inserted node has outgoing edges with weight zero, all leading to
+        the next lower node.
+        """
+        if self._fully_reduced:
+            return edge
+        while edge.succ.level < level:
+            node_level = edge.succ.level + 1
+            child = Edge(weight=0, succ=edge.succ, is_fully_reduced=False)
+            children = self._level_to_domain_size(node_level) * [child]
+            node = Node(level=node_level, children=children, is_fully_reduced=False)
+            edge = Edge(weight=edge.weight, succ=node, is_fully_reduced=False)
+        return edge
 
     def _make_var_evmdd_for_level(self, level: int) -> Edge:
         """Construct an |EVMDD| representing a given variable.
@@ -538,16 +561,22 @@ class EvmddManager:
         test node branching on the variable of the requested level. The test
         node has one outgoing edge for each value `d` in the domain of the tested
         variable. The weight of the edge for value `d` has weight `d`. All edges
-        lead to the unique sink node.
+        lead to the unique sink node. In the quasi-reduced case, nodes branching
+        over all other variables are inserted above and below the test node
+        (see `_extend_to_level`).
         """
         sink = _make_sink_node(self._fully_reduced)
+        below = self._extend_to_level(
+            Edge(weight=0, succ=sink, is_fully_reduced=self._fully_reduced), level - 1
+        )
         domain_size = self._level_to_domain_size(level)
         children = [
-            Edge(weight=d, succ=sink, is_fully_reduced=self._fully_reduced)
+            Edge(weight=d, succ=below.succ, is_fully_reduced=self._fully_reduced)
             for d in range(domain_size)
         ]
         var_node = Node(level=level, children=children, is_fully_reduced=self._fully_reduced)
-        return Edge(weight=0, succ=var_node, is_fully_reduced=self._fully_reduced)
+        var_evmdd = Edge(weight=0, succ=var_node, is_fully_reduced=self._fully_reduced)
+        return self._extend_to_level(var_evmdd, len(self._var_names))
 
     def make_var_evmdd_for_var(self, var_name: str) -> Edge:
         """Construct an |EVMDD| representing a given variable.

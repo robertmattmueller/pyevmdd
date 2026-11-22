@@ -16,6 +16,7 @@
 
 import gc
 import weakref
+from itertools import product
 
 import pytest
 
@@ -118,3 +119,24 @@ def test_apply_combines_shared_sub_evmdds_only_once(fully_reduced):
     )
     assert evmdd.num_nodes() == len(names) + 1
     assert evaluate(evmdd, {var: 2 for var in names}, manager) == 2 * len(names)
+
+
+@pytest.mark.parametrize('expr', ['3', 'A', 'B', 'C', 'A - C', 'B**0', 'A*B - A*B', '-B'])
+def test_quasi_reduced_evmdds_branch_over_all_variables(expr):
+    # Also for variables of the ordering that do not occur in the term.
+    var_names = ['A', 'B', 'C']
+    var_domains = {'A': 2, 'B': 3, 'C': 2}
+    evmdd, manager = term_to_evmdd(
+        expr, var_names=var_names, var_domains=var_domains, fully_reduced=False
+    )
+    levels = {node.level for node in evmdd.nodes()}
+    assert levels == {0, 1, 2, 3}
+    for values in product(range(2), range(3), range(2)):
+        valuation = dict(zip(var_names, values, strict=True))
+        assert evaluate(evmdd, valuation, manager) == eval(expr, dict(valuation))
+
+
+@pytest.mark.parametrize('expr', ['3', 'A - A', 'B**0'])
+def test_fully_reduced_constants_have_only_sink_node(expr):
+    evmdd, _ = term_to_evmdd(expr, var_names=['A', 'B'])
+    assert evmdd.succ.is_sink_node()

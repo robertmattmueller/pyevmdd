@@ -46,6 +46,9 @@ Fixed
   sub-EVMDDs.
 * Visualization no longer calls Graphviz when the DOT file could not be
   written.
+* Quasi-reduced EVMDDs now branch over all variables of the ordering,
+  including variables that do not occur in the term. Previously, such
+  levels were skipped, and ``evaluate`` failed with an ``AssertionError``.
 
 Removed
 ~~~~~~~
