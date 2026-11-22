@@ -1,4 +1,4 @@
-evmdd/__pycache__
-evmdd/*.pyc
+__pycache__/
+*.pyc
+.pytest_cache/
 sphinx/_build
-sphinx/*.pyc
