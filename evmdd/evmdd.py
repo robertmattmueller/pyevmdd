@@ -36,6 +36,7 @@ from .util import EqualityMixin, memoize
 
 _DEFAULT_IS_FULLY_REDUCED = True
 
+
 def _make_sink_node(is_fully_reduced=_DEFAULT_IS_FULLY_REDUCED):
     """Create the unique 0-sink node.
 
@@ -48,14 +49,17 @@ def _make_sink_node(is_fully_reduced=_DEFAULT_IS_FULLY_REDUCED):
     """
     return Node(level=0, children=[], is_fully_reduced=is_fully_reduced)
 
+
 def _make_const_evmdd(number, is_fully_reduced=_DEFAULT_IS_FULLY_REDUCED):
     """Construct an |EVMDD| representing a given constant number.
 
     This is the |EVMDD| with a single edge immediately leading to the sink
     node, labeled with the given constant as its edge weight.
     """
-    return Edge(weight=number, succ=_make_sink_node(is_fully_reduced),
-                is_fully_reduced=is_fully_reduced)
+    return Edge(
+        weight=number, succ=_make_sink_node(is_fully_reduced), is_fully_reduced=is_fully_reduced
+    )
+
 
 def _aggregate_weights(weight1, weight2, oper):
     """Aggregate weights according to operator.
@@ -72,10 +76,11 @@ def _aggregate_weights(weight1, weight2, oper):
         assert oper is Edge.__mul__
         return weight1 * weight2
 
+
 def _is_terminal_case(edge1, edge2):
-    """Test if `edge1` and `edge2` are both sink edges with constant value.
-    """
+    """Test if `edge1` and `edge2` are both sink edges with constant value."""
     return edge1.succ.is_sink_node() and edge2.succ.is_sink_node()
+
 
 def _terminal_value(edge1, edge2, oper, is_fully_reduced):
     """Compute the new |EVMDD| for `edge1 oper edge2` in the terminal case
@@ -93,6 +98,7 @@ def _terminal_value(edge1, edge2, oper, is_fully_reduced):
     result_weight = _aggregate_weights(edge1.weight, edge2.weight, oper)
     return _make_const_evmdd(number=result_weight, is_fully_reduced=is_fully_reduced)
 
+
 def _align_levels(edge1, edge2):
     """In case one of the |EVMDDs| to which an arithmetic operation is
     applied is not quasi-reduced, it can happen that the two top-most nodes
@@ -107,9 +113,10 @@ def _align_levels(edge1, edge2):
     respective children and only later again pulled up after aggregation.
     """
     if edge1.succ.level >= edge2.succ.level:
-        return [child+edge1.weight for child in edge1.succ.children]
+        return [child + edge1.weight for child in edge1.succ.children]
     else:
         return len(edge2.succ.children) * [edge1]
+
 
 def _log_apply(edge1, edge2, oper, result, terminal):
     """Log result of operator application to two edges.
@@ -130,10 +137,13 @@ def _log_apply(edge1, edge2, oper, result, terminal):
         place = 'terminal'
     else:
         place = 'recursive'
-    logging.debug(('%s: applying %s to\n' % (place, oper)) +
-                  ('    %s and\n' % repr(edge1)) +
-                  ('    %s results in\n' % repr(edge2)) +
-                  ('    %s\n' % repr(result)))
+    logging.debug(
+        ('%s: applying %s to\n' % (place, oper))
+        + ('    %s and\n' % repr(edge1))
+        + ('    %s results in\n' % repr(edge2))
+        + ('    %s\n' % repr(result))
+    )
+
 
 def _perform_shannon_reduction(succ):
     """Perform Shannon reduction while combining two |EVMDDs| into one.
@@ -148,13 +158,15 @@ def _perform_shannon_reduction(succ):
     children = succ.children
     first_child_weight = children[0].weight
     first_child_succ = children[0].succ
-    if (all([child.weight == first_child_weight for child in children]) and
-            all([child.succ == first_child_succ for child in children])):
+    if all([child.weight == first_child_weight for child in children]) and all(
+        [child.succ == first_child_succ for child in children]
+    ):
         assert first_child_weight == 0
         succ_after_reduction = first_child_succ
     else:
         succ_after_reduction = succ
     return succ_after_reduction
+
 
 @memoize
 class Edge(EqualityMixin):
@@ -221,13 +233,14 @@ class Edge(EqualityMixin):
 
         children = [oper(sc, oc) for sc, oc in zip(self_children, other_children, strict=True)]
         result_weight = min([child.weight for child in children])
-        children = tuple([child-result_weight for child in children])
+        children = tuple([child - result_weight for child in children])
         result_succ = Node(level, children, self.is_fully_reduced)
 
         if self.is_fully_reduced:
             result_succ = _perform_shannon_reduction(result_succ)
-        result = Edge(weight=result_weight, succ=result_succ,
-                      is_fully_reduced=self.is_fully_reduced)
+        result = Edge(
+            weight=result_weight, succ=result_succ, is_fully_reduced=self.is_fully_reduced
+        )
         _log_apply(self, other, oper, result, False)
         return result
 
@@ -236,16 +249,18 @@ class Edge(EqualityMixin):
             return self._apply(other, Edge.__add__)
         else:
             assert isinstance(other, Integral)
-            return Edge(weight=self.weight+other, succ=self.succ,
-                        is_fully_reduced=self.is_fully_reduced)
+            return Edge(
+                weight=self.weight + other, succ=self.succ, is_fully_reduced=self.is_fully_reduced
+            )
 
     def __sub__(self, other):
         if isinstance(other, type(self)):
             return self._apply(other, Edge.__sub__)
         else:
             assert isinstance(other, Integral)
-            return Edge(weight=self.weight-other, succ=self.succ,
-                        is_fully_reduced=self.is_fully_reduced)
+            return Edge(
+                weight=self.weight - other, succ=self.succ, is_fully_reduced=self.is_fully_reduced
+            )
 
     def __mul__(self, other):
         return self._apply(other, Edge.__mul__)
@@ -255,17 +270,20 @@ class Edge(EqualityMixin):
 
     def __pow__(self, other):
         if not isinstance(other, Integral) or other < 0:
-            raise ValueError("EVMDDs may only be raised to a nonnegative integral power.")
+            raise ValueError('EVMDDs may only be raised to a nonnegative integral power.')
         if other == 0:
             return _make_const_evmdd(1, self.is_fully_reduced)
-        return self * (self ** (other-1))
+        return self * (self ** (other - 1))
 
     def __str__(self):
         return 'Edge(%s,%s)' % (self.weight, self.succ)
 
     def __repr__(self):
-        return ('Edge(weight=%s,succ=%s,is_fully_reduced=%s)' %
-                (self.weight, repr(self.succ), self.is_fully_reduced))
+        return 'Edge(weight=%s,succ=%s,is_fully_reduced=%s)' % (
+            self.weight,
+            repr(self.succ),
+            self.is_fully_reduced,
+        )
 
 
 @memoize
@@ -323,8 +341,11 @@ class Node(EqualityMixin):
         return 'Node(%s,%s)' % (self.level, children)
 
     def __repr__(self):
-        return ('Node(level=%s,children=%s,is_fully_reduced=%s)' %
-                (self.level, repr(self.children), self.is_fully_reduced))
+        return 'Node(level=%s,children=%s,is_fully_reduced=%s)' % (
+            self.level,
+            repr(self.children),
+            self.is_fully_reduced,
+        )
 
 
 class EvmddManager(object):
@@ -347,8 +368,7 @@ class EvmddManager(object):
     """
 
     def __init__(self, var_names, var_domains, fully_reduced=_DEFAULT_IS_FULLY_REDUCED):
-        """Initialize an `EvmddManager` with variable names and domain sizes.
-        """
+        """Initialize an `EvmddManager` with variable names and domain sizes."""
         assert len(var_names) == len(var_domains)
         self._var_names = var_names
         self._var_domains = var_domains
@@ -415,8 +435,10 @@ class EvmddManager(object):
         """
         sink = _make_sink_node(self._fully_reduced)
         domain_size = self._level_to_domain_size(level)
-        children = [Edge(weight=d, succ=sink,
-                         is_fully_reduced=self._fully_reduced) for d in range(domain_size)]
+        children = [
+            Edge(weight=d, succ=sink, is_fully_reduced=self._fully_reduced)
+            for d in range(domain_size)
+        ]
         var_node = Node(level=level, children=children, is_fully_reduced=self._fully_reduced)
         return Edge(weight=0, succ=var_node, is_fully_reduced=self._fully_reduced)
 
@@ -490,11 +512,14 @@ def evaluate(evmdd, valuation, manager):
         assert min([child.weight for child in current_node.children]) == 0
         if current_edge.is_fully_reduced:
             assert all([child.succ.level < current_node.level for child in current_node.children])
-            assert (len(set([child.succ for child in current_node.children])) > 1 or
-                    max([child.weight for child in current_node.children]) > 0) # Shannon
+            assert (
+                len(set([child.succ for child in current_node.children])) > 1
+                or max([child.weight for child in current_node.children]) > 0
+            )  # Shannon
         else:
-            assert all([child.succ.level == current_node.level-1
-                        for child in current_node.children])
+            assert all(
+                [child.succ.level == current_node.level - 1 for child in current_node.children]
+            )
         var_name = manager.var_name_of(current_node)
         var_value = valuation[var_name]
         assert 0 <= var_value < len(current_node.children)
@@ -506,7 +531,9 @@ def evaluate(evmdd, valuation, manager):
 
 def _test():
     import doctest
+
     doctest.testmod()
+
 
 if __name__ == '__main__':
     _test()

@@ -27,9 +27,20 @@ from numbers import Integral, Number
 
 from .evmdd import EvmddManager
 
-_LEGAL_EXPRESSIONS = [ast.Expression, ast.Load, ast.BinOp,
-                      ast.Add, ast.Mult, ast.Constant, ast.Name,
-                      ast.UnaryOp, ast.USub, ast.Sub, ast.Pow]
+_LEGAL_EXPRESSIONS = [
+    ast.Expression,
+    ast.Load,
+    ast.BinOp,
+    ast.Add,
+    ast.Mult,
+    ast.Constant,
+    ast.Name,
+    ast.UnaryOp,
+    ast.USub,
+    ast.Sub,
+    ast.Pow,
+]
+
 
 def _is_numeric_constant(node):
     """Test if `node` is a numeric literal.
@@ -38,9 +49,12 @@ def _is_numeric_constant(node):
     strings, bytes, booleans, ``None`` and ``...`` have to be excluded
     explicitly.
     """
-    return (isinstance(node, ast.Constant) and
-            isinstance(node.value, Number) and
-            not isinstance(node.value, bool))
+    return (
+        isinstance(node, ast.Constant)
+        and isinstance(node.value, Number)
+        and not isinstance(node.value, bool)
+    )
+
 
 def read_function_term(function_term):
     """Read a function term and transform it into an AST.
@@ -59,6 +73,7 @@ def read_function_term(function_term):
             assert _is_numeric_constant(node)
     return expression
 
+
 def collect_variables(function_term_ast):
     """Determine the set of all variables occurring in a given function term.
 
@@ -74,6 +89,7 @@ def collect_variables(function_term_ast):
             name = node.id
             variables.add(name)
     return variables
+
 
 def _to_evmdd_rec(node, manager):
     """Translate a function term represented as an AST to the corresponding
@@ -109,15 +125,18 @@ def _to_evmdd_rec(node, manager):
             return left * right
         else:
             assert isinstance(node.op, ast.Pow)
-            if ((not _is_numeric_constant(node.right)) or
-                (not isinstance(node.right.value, Integral)) or
-                (node.right.value < 0)):
-                raise ValueError("EVMDDs may only be raised to a nonnegative integral power.")
-            return left ** node.right.value
+            if (
+                (not _is_numeric_constant(node.right))
+                or (not isinstance(node.right.value, Integral))
+                or (node.right.value < 0)
+            ):
+                raise ValueError('EVMDDs may only be raised to a nonnegative integral power.')
+            return left**node.right.value
     else:
         assert isinstance(node, ast.UnaryOp)
         assert isinstance(node.op, ast.USub)
         return -_to_evmdd_rec(node.operand, manager)
+
 
 def term_to_evmdd(function_term, **kwargs):
     r"""Translate a function term to the corresponding |EVMDD|.
@@ -186,8 +205,9 @@ def term_to_evmdd(function_term, **kwargs):
 
 def _test():
     import doctest
+
     doctest.testmod()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     _test()

@@ -23,15 +23,36 @@ import pytest
 from evmdd import collect_variables, evaluate, read_function_term, term_to_evmdd
 
 EXPRS = [
-    '0', '1',
-    'A', 'B', '0*A', '2*A', '0*B', '2*B',
-    'A+B', 'B+A', '1-A', '1-B',
-    '-A', 'A-B', 'B-A', '-(A+B)',
-    'A*B + B', 'B + A*B',
-    'A*B*B + C + 2', 'A*B - 17',
-    'A*B - A*B', 'A-A',
-    '1*(A+2)', 'A*(B+2)', 'A*(B+2)*(B+2) + C + 2',
-    'A**0', 'A**1', 'A*B**2 + C + 2', '(A-B)**3', '-2*A**2',
+    '0',
+    '1',
+    'A',
+    'B',
+    '0*A',
+    '2*A',
+    '0*B',
+    '2*B',
+    'A+B',
+    'B+A',
+    '1-A',
+    '1-B',
+    '-A',
+    'A-B',
+    'B-A',
+    '-(A+B)',
+    'A*B + B',
+    'B + A*B',
+    'A*B*B + C + 2',
+    'A*B - 17',
+    'A*B - A*B',
+    'A-A',
+    '1*(A+2)',
+    'A*(B+2)',
+    'A*(B+2)*(B+2) + C + 2',
+    'A**0',
+    'A**1',
+    'A*B**2 + C + 2',
+    '(A-B)**3',
+    '-2*A**2',
 ]
 
 DOMAIN_SIZE = 4
@@ -45,9 +66,9 @@ def test_evmdd_agrees_with_python_eval(expr, fully_reduced):
     var_set = collect_variables(read_function_term(expr))
     var_domains = {var: DOMAIN_SIZE for var in var_set}
     for var_names in permutations(sorted(var_set)):
-        evmdd, manager = term_to_evmdd(expr, var_names=list(var_names),
-                                       var_domains=var_domains,
-                                       fully_reduced=fully_reduced)
+        evmdd, manager = term_to_evmdd(
+            expr, var_names=list(var_names), var_domains=var_domains, fully_reduced=fully_reduced
+        )
         for values in product(range(DOMAIN_SIZE), repeat=len(var_names)):
             valuation = dict(zip(var_names, values, strict=True))
             assert evaluate(evmdd, valuation, manager) == eval(expr, valuation)

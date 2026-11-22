@@ -29,12 +29,16 @@ from .parser import term_to_evmdd
 
 
 def _print_usage():
-    print('usage:   %s "<function term in Python syntax>"' % (
-        sys.argv[0]) + ' ["<variable ordering>" ["<variable domain sizes>"]]')
+    print(
+        'usage:   %s "<function term in Python syntax>"' % (sys.argv[0])
+        + ' ["<variable ordering>" ["<variable domain sizes>"]]'
+    )
     print('example: %s "A*B*B + C + 2" "A, B, C" "2, 3, 2"' % sys.argv[0])
+
 
 def _parse_comma_separated_list(line):
     return [s.strip() for s in line.split(',')]
+
 
 def _parse_command_line():
     try:
@@ -65,13 +69,16 @@ def _parse_command_line():
 
     return function_term, var_names, var_domains
 
+
 def main():
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
     function_term, var_names, var_domains = _parse_command_line()
-    evmdd, manager = term_to_evmdd(function_term,
-                                   var_names=var_names, var_domains=var_domains, fully_reduced=True)
+    evmdd, manager = term_to_evmdd(
+        function_term, var_names=var_names, var_domains=var_domains, fully_reduced=True
+    )
     visualizer = EvmddVisualizer(manager)
     visualizer.visualize(evmdd)
+
 
 if __name__ == '__main__':
     main()

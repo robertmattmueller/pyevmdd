@@ -43,8 +43,9 @@ def test_dot_output_for_single_variable():
 
 
 def test_dot_output_mentions_every_variable_node():
-    evmdd, manager = term_to_evmdd('A*B**2 + C + 2', var_names=['A', 'B', 'C'],
-                                   var_domains={'A': 2, 'B': 3, 'C': 2})
+    evmdd, manager = term_to_evmdd(
+        'A*B**2 + C + 2', var_names=['A', 'B', 'C'], var_domains={'A': 2, 'B': 3, 'C': 2}
+    )
     dot = GraphvizWriter(manager).evmdd_to_gvz(evmdd)
     for var_name in ['A', 'B', 'C']:
         assert 'label="%s"' % var_name in dot

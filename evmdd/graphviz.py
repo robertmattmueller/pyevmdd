@@ -59,12 +59,10 @@ class GraphvizWriter(object):
         return self._weight_node_gvz_tmpl % (weight_node_name, weight)
 
     def _var_to_weight_edge_gvz(self, var_node_name, weight_node_name, domain_idx):
-        return (self._var_to_weight_edge_gvz_tmpl %
-                (var_node_name, weight_node_name, domain_idx))
+        return self._var_to_weight_edge_gvz_tmpl % (var_node_name, weight_node_name, domain_idx)
 
     def _weight_to_var_edge_gvz(self, weight_node_name, succ_var_node_name):
-        return (self._weight_to_var_edge_gvz_tmpl %
-                (weight_node_name, succ_var_node_name))
+        return self._weight_to_var_edge_gvz_tmpl % (weight_node_name, succ_var_node_name)
 
     def _var_node_name(self, node):
         return self._var_node_name_tmpl % (self._index[node], node.level)
@@ -92,8 +90,9 @@ class GraphvizWriter(object):
         for domain_idx, child in enumerate(node.children):
             weight_node_name = self._weight_node_name(node, domain_idx)
             weight_node = self._weight_node_gvz(weight_node_name, child.weight)
-            var_to_weight_edge = self._var_to_weight_edge_gvz(var_node_name,
-                                                              weight_node_name, domain_idx)
+            var_to_weight_edge = self._var_to_weight_edge_gvz(
+                var_node_name, weight_node_name, domain_idx
+            )
             succ_var_node_name = self._var_node_name(child.succ)
             weight_to_var_edge = self._weight_to_var_edge_gvz(weight_node_name, succ_var_node_name)
             result.extend([weight_node, var_to_weight_edge, weight_to_var_edge])
@@ -128,8 +127,7 @@ class GraphvizWriter(object):
 
 
 class EvmddVisualizer(object):
-    """Helper class that displays |EVMDDs| on the screen.
-    """
+    """Helper class that displays |EVMDDs| on the screen."""
 
     def __init__(self, manager):
         self._gvz_writer = GraphvizWriter(manager)
@@ -194,6 +192,7 @@ class EvmddVisualizer(object):
         """
         if not file_prefix:
             import uuid
+
             rnd = uuid.uuid4()
             file_prefix = '/tmp/evmdd-gvz-%s' % rnd
         dot_filename = file_prefix + '.dot'

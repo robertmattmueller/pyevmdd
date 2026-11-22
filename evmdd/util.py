@@ -17,8 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Utilities for |EVMDD| library.
-"""
+"""Utilities for |EVMDD| library."""
 
 from functools import wraps
 
@@ -45,6 +44,7 @@ def memoize(obj):
         if key not in cache:
             cache[key] = obj(*args, **kwargs)
         return cache[key]
+
     return memoizer
 
 
@@ -54,12 +54,12 @@ class EqualityMixin(object):
 
     Equality, inequality and hash function are defined component-wise.
     """
+
     def __init__(self):
         pass
 
     def __eq__(self, other):
-        return (isinstance(other, self.__class__)
-                and self.__dict__ == other.__dict__)
+        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
 
     def __ne__(self, other):
         return not self.__eq__(other)
