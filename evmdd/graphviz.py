@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 # This file is part of the EVMDD Library for Python (pyevmdd).
 # Copyright (C) 2016 Robert Mattmüller
 
@@ -30,7 +27,7 @@ from operator import attrgetter
 from sys import platform
 
 
-class GraphvizWriter(object):
+class GraphvizWriter:
     """Helper class that writes |EVMDDs| to strings in Graphviz/DOT format."""
 
     _root_node_gvz_tmpl = '%s [style=invis];'
@@ -102,7 +99,7 @@ class GraphvizWriter(object):
 
     def _node_rank_to_gvz(self, rank):
         rank = ';'.join([self._var_node_name(node) for node in rank])
-        return '{rank = same; %s;}' % rank
+        return f'{{rank = same; {rank};}}'
 
     def evmdd_to_gvz(self, evmdd):
         """Translate a given |EVMDD| to Graphviz format.
@@ -128,7 +125,7 @@ class GraphvizWriter(object):
         return '\n'.join(lines)
 
 
-class EvmddVisualizer(object):
+class EvmddVisualizer:
     """Helper class that displays |EVMDDs| on the screen."""
 
     def __init__(self, manager):

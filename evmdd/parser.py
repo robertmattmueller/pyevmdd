@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 # This file is part of the EVMDD Library for Python (pyevmdd).
 # Copyright (C) 2016 Robert Mattmüller
 
@@ -76,12 +73,12 @@ def read_function_term(function_term):
     for node in ast.walk(expression):
         if type(node) not in _LEGAL_EXPRESSIONS:
             raise ValueError(
-                'Unsupported syntax %s in function term %r.' % (type(node).__name__, function_term)
+                f'Unsupported syntax {type(node).__name__} in function term {function_term!r}.'
             )
         if isinstance(node, ast.Constant) and not _is_integer_constant(node):
             raise ValueError(
-                'Unsupported constant %r in function term %r. Only integers are allowed.'
-                % (node.value, function_term)
+                f'Unsupported constant {node.value!r} in function term {function_term!r}. '
+                'Only integers are allowed.'
             )
     return expression
 
@@ -203,29 +200,17 @@ def term_to_evmdd(function_term, *, var_names=None, var_domains=None, fully_redu
 
     missing = term_variables - set(var_names)
     if missing:
-        raise ValueError(
-            'Variables %s missing from variable ordering.' % ', '.join(sorted(missing))
-        )
+        raise ValueError(f'Variables {", ".join(sorted(missing))} missing from variable ordering.')
 
     if not var_domains:
         var_domains = {var: 2 for var in var_names}
 
     missing = [var for var in var_names if var not in var_domains]
     if missing:
-        raise ValueError('No domain sizes given for variables %s.' % ', '.join(missing))
+        raise ValueError(f'No domain sizes given for variables {", ".join(missing)}.')
     var_domains = [var_domains[var] for var in var_names]
 
     manager = EvmddManager(var_names, var_domains, fully_reduced)
 
     assert isinstance(function_term_ast, ast.Expression)
     return _to_evmdd_rec(function_term_ast.body, manager), manager
-
-
-def _test():
-    import doctest
-
-    doctest.testmod()
-
-
-if __name__ == '__main__':
-    _test()

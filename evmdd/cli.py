@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 # This file is part of the EVMDD Library for Python (pyevmdd).
 # Copyright (C) 2016 Robert Mattmüller
 
@@ -72,13 +69,11 @@ def _parse_var_domains(parser, var_names, var_domains):
     if var_domains is None:
         return None
     if len(var_names) != len(var_domains):
-        parser.error(
-            'got %d variable names, but %d domain sizes' % (len(var_names), len(var_domains))
-        )
+        parser.error(f'got {len(var_names)} variable names, but {len(var_domains)} domain sizes')
     try:
         return {var: int(dom) for var, dom in zip(var_names, var_domains, strict=True)}
     except ValueError:
-        parser.error('domain sizes must be integers: %s' % ', '.join(var_domains))
+        parser.error(f'domain sizes must be integers: {", ".join(var_domains)}')
 
 
 def main(argv=None):

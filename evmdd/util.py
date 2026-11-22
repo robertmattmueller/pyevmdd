@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 # This file is part of the EVMDD Library for Python (pyevmdd).
 # Copyright (C) 2016 Robert Mattmüller
 
@@ -48,7 +45,7 @@ def memoize(obj):
     return memoizer
 
 
-class EqualityMixin(object):
+class EqualityMixin:
     """Mixin used in other classes to provide a default ``==`` and ``!=`` test
     and hash function.
 

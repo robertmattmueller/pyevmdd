@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 # This file is part of the EVMDD Library for Python (pyevmdd).
 # Copyright (C) 2016 Robert Mattmüller
 
@@ -52,7 +50,7 @@ def test_dot_output_mentions_every_variable_node():
     )
     dot = GraphvizWriter(manager).evmdd_to_gvz(evmdd)
     for var_name in ['A', 'B', 'C']:
-        assert 'label="%s"' % var_name in dot
+        assert f'label="{var_name}"' in dot
     assert dot.count('fillcolor=lightgrey') == evmdd.num_nodes() - 1
 
 

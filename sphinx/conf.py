@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # EVMDD Library for Python (pyevmdd) documentation build configuration file, created by
 # sphinx-quickstart on Mon Dec 21 14:32:55 2015.

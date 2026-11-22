@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 # This file is part of the EVMDD Library for Python (pyevmdd).
 # Copyright (C) 2016 Robert Mattmüller
 
@@ -138,10 +135,12 @@ def _log_apply(edge1, edge2, oper, result, terminal):
     else:
         place = 'recursive'
     logging.debug(
-        ('%s: applying %s to\n' % (place, oper))
-        + ('    %s and\n' % repr(edge1))
-        + ('    %s results in\n' % repr(edge2))
-        + ('    %s\n' % repr(result))
+        '%s: applying %s to\n    %r and\n    %r results in\n    %r\n',
+        place,
+        oper,
+        edge1,
+        edge2,
+        result,
     )
 
 
@@ -281,13 +280,12 @@ class Edge(EqualityMixin):
         return self * (self ** (other - 1))
 
     def __str__(self):
-        return 'Edge(%s,%s)' % (self.weight, self.succ)
+        return f'Edge({self.weight},{self.succ})'
 
     def __repr__(self):
-        return 'Edge(weight=%s,succ=%s,is_fully_reduced=%s)' % (
-            self.weight,
-            repr(self.succ),
-            self.is_fully_reduced,
+        return (
+            f'Edge(weight={self.weight},succ={self.succ!r},'
+            f'is_fully_reduced={self.is_fully_reduced})'
         )
 
 
@@ -342,18 +340,17 @@ class Node(EqualityMixin):
     def __str__(self):
         if self.is_sink_node():
             return '0'
-        children = '[%s]' % (','.join([str(child) for child in self.children]),)
-        return 'Node(%s,%s)' % (self.level, children)
+        children = ','.join([str(child) for child in self.children])
+        return f'Node({self.level},[{children}])'
 
     def __repr__(self):
-        return 'Node(level=%s,children=%s,is_fully_reduced=%s)' % (
-            self.level,
-            repr(self.children),
-            self.is_fully_reduced,
+        return (
+            f'Node(level={self.level},children={self.children!r},'
+            f'is_fully_reduced={self.is_fully_reduced})'
         )
 
 
-class EvmddManager(object):
+class EvmddManager:
     """Manager for |EVMDDs| taking care of variable names and orderings,
     variable domain sizes, and construction of basic |EVMDDs| representing
     numeric constants and variables.
@@ -383,16 +380,16 @@ class EvmddManager(object):
         var_names = list(var_names)
         var_domains = list(var_domains)
         if len(set(var_names)) != len(var_names):
-            raise ValueError('Variable names must be unique: %s.' % ', '.join(var_names))
+            raise ValueError(f'Variable names must be unique: {", ".join(var_names)}.')
         if len(var_names) != len(var_domains):
             raise ValueError(
-                'Got %d variable names, but %d domain sizes.' % (len(var_names), len(var_domains))
+                f'Got {len(var_names)} variable names, but {len(var_domains)} domain sizes.'
             )
         for var_name, domain_size in zip(var_names, var_domains, strict=True):
             if not isinstance(domain_size, Integral) or domain_size < 1:
                 raise ValueError(
-                    'Domain size of variable %s must be a positive integer, got %r.'
-                    % (var_name, domain_size)
+                    f'Domain size of variable {var_name} must be a positive integer, '
+                    f'got {domain_size!r}.'
                 )
         self._var_names = var_names
         self._var_domains = var_domains
@@ -421,7 +418,7 @@ class EvmddManager(object):
     def _var_name_to_level(self, var_name):
         """Determine the level of a given variable name."""
         if var_name not in self._var_names:
-            raise ValueError('Unknown variable %s.' % var_name)
+            raise ValueError(f'Unknown variable {var_name}.')
         return len(self._var_names) - self._var_names.index(var_name)
 
     def var_name_of(self, node):
@@ -549,20 +546,10 @@ def evaluate(evmdd, valuation, manager):
         var_value = valuation[var_name]
         if not 0 <= var_value < len(current_node.children):
             raise ValueError(
-                'Value %r of variable %s is outside of its domain 0..%d.'
-                % (var_value, var_name, len(current_node.children) - 1)
+                f'Value {var_value!r} of variable {var_name} is outside of its domain '
+                f'0..{len(current_node.children) - 1}.'
             )
         current_edge = current_node.children[var_value]
         result = result + current_edge.weight
         current_node = current_edge.succ
     return result
-
-
-def _test():
-    import doctest
-
-    doctest.testmod()
-
-
-if __name__ == '__main__':
-    _test()
