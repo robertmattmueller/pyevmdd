@@ -28,8 +28,7 @@ supposed to deal with fully reduced (if true) or quasi-reduced (if false)
 
 import logging
 from numbers import Integral
-
-from .util import EqualityMixin, memoize
+from weakref import WeakValueDictionary
 
 _DEFAULT_IS_FULLY_REDUCED = True
 
@@ -167,8 +166,7 @@ def _perform_shannon_reduction(succ):
     return succ_after_reduction
 
 
-@memoize
-class Edge(EqualityMixin):
+class Edge:
     """An edge in an |EVMDD|, specifying weight and successor node.
 
     The `weight` of an edge `e` is the partial function value associated with
@@ -187,13 +185,26 @@ class Edge(EqualityMixin):
     collection `succ`, i.e., ``len(succ) == 1`` must hold for this edge. Since
     |EVMDDs| can be identified by their dangling incoming edge, we do not need
     a separate `EVMDD` class, but rather use `Edges` to represent |EVMDDs|.
+
+    Like `Nodes`, `Edges` are unique: constructing an `Edge` with the same
+    weight, successor node, and flag as an existing one returns that existing
+    object (see `Node`).
     """
 
-    def __init__(self, weight, succ, is_fully_reduced=_DEFAULT_IS_FULLY_REDUCED):
-        """Initialize an `Edge` with weight and successor node."""
-        self.weight = weight
-        self.succ = succ
-        self.is_fully_reduced = is_fully_reduced
+    __slots__ = ('weight', 'succ', 'is_fully_reduced', '__weakref__')
+    _unique_table = WeakValueDictionary()
+
+    def __new__(cls, weight, succ, is_fully_reduced=_DEFAULT_IS_FULLY_REDUCED):
+        """Get the unique `Edge` with given weight and successor node."""
+        key = (weight, succ, is_fully_reduced)
+        edge = cls._unique_table.get(key)
+        if edge is None:
+            edge = super().__new__(cls)
+            edge.weight = weight
+            edge.succ = succ
+            edge.is_fully_reduced = is_fully_reduced
+            cls._unique_table[key] = edge
+        return edge
 
     def nodes(self):
         """Get all nodes in the (sub-) |EVMDD| rooted at this edge."""
@@ -289,8 +300,7 @@ class Edge(EqualityMixin):
         )
 
 
-@memoize
-class Node(EqualityMixin):
+class Node:
     """A node in an |EVMDD| specifying level and children.
 
     The `level` of a node `n` specifies how far from the sink node `n` is
@@ -315,16 +325,38 @@ class Node(EqualityMixin):
 
     Like `Edges`, `Nodes` keep track of whether they belong to a fully reduced
     or a quasi-reduced |EVMDD| via the flag `is_fully_reduced`.
+
+    `Nodes` and `Edges` are unique: constructing a `Node` with the same level,
+    children, and flag as an existing one returns that existing object. Such
+    |EVMDDs| would represent the same arithmetic function, and it is both
+    memory efficient to have only one copy of each such |EVMDD|, and
+    necessary to guarantee isomorphism reduction of all constructed |EVMDDs|.
+    If there is only one object for each arithmetic function, then all
+    |EVMDDs| will be isomorphism reduced by construction. As a consequence,
+    equality of `Nodes` and `Edges` is object identity.
+
+    The unique tables only hold weak references, so |EVMDDs| that are no
+    longer used are garbage collected.
     """
 
-    def __init__(self, level, children, is_fully_reduced=_DEFAULT_IS_FULLY_REDUCED):
-        """Initialize an |EVMDD| node with level and children."""
-        self.level = level
-        self.children = tuple(children)
-        self.is_fully_reduced = is_fully_reduced
-        if level == 0:
-            assert len(children) == 0
-        assert all([child.is_fully_reduced == is_fully_reduced for child in children])
+    __slots__ = ('level', 'children', 'is_fully_reduced', '__weakref__')
+    _unique_table = WeakValueDictionary()
+
+    def __new__(cls, level, children, is_fully_reduced=_DEFAULT_IS_FULLY_REDUCED):
+        """Get the unique |EVMDD| node with given level and children."""
+        children = tuple(children)
+        key = (level, children, is_fully_reduced)
+        node = cls._unique_table.get(key)
+        if node is None:
+            if level == 0:
+                assert len(children) == 0
+            assert all([child.is_fully_reduced == is_fully_reduced for child in children])
+            node = super().__new__(cls)
+            node.level = level
+            node.children = children
+            node.is_fully_reduced = is_fully_reduced
+            cls._unique_table[key] = node
+        return node
 
     def is_sink_node(self):
         """Test if this is the sink node."""

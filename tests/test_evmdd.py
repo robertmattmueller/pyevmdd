@@ -14,9 +14,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import gc
+import weakref
+
 import pytest
 
-from evmdd import EvmddManager, evaluate, term_to_evmdd
+from evmdd import Edge, EvmddManager, Node, evaluate, term_to_evmdd
 
 
 @pytest.mark.parametrize(
@@ -66,3 +69,25 @@ def test_adding_integer_shifts_function():
     evmdd, manager = term_to_evmdd('A')
     assert evaluate(evmdd + 3, {'A': 1}, manager) == 4
     assert evaluate(evmdd - 3, {'A': 1}, manager) == -2
+
+
+def test_equal_functions_are_represented_by_identical_objects():
+    left, manager = term_to_evmdd('A*B + B', var_names=['A', 'B'])
+    right, _ = term_to_evmdd('B + B*A', var_names=['A', 'B'])
+    assert left is right
+
+
+def test_node_and_edge_construction_is_unique_regardless_of_argument_form():
+    sink = Node(0, [])
+    assert Node(level=0, children=(), is_fully_reduced=True) is sink
+    children = [Edge(0, sink), Edge(weight=1, succ=sink)]
+    assert Node(1, children) is Node(level=1, children=tuple(children))
+
+
+def test_unused_evmdds_are_garbage_collected():
+    evmdd, _ = term_to_evmdd('A*B*C*D + 12345', var_domains={v: 7 for v in 'ABCD'})
+    edge_ref, node_ref = weakref.ref(evmdd), weakref.ref(evmdd.succ)
+    del evmdd
+    gc.collect()
+    assert edge_ref() is None
+    assert node_ref() is None
