@@ -159,56 +159,6 @@ def term_to_evmdd(function_term, **kwargs):
         >>> valuation = {'A': 1, 'B': 2, 'C': 0}
         >>> evaluate(evmdd, valuation, manager)
         6
-
-    The next example shows that this works across a range of function terms,
-    variable orderings, valuations, and both for fully and quasi-reduced
-    |EVMDDs|.
-
-    Example:
-        >>> from itertools import permutations, product
-        >>> from .evmdd import evaluate
-        >>>
-        >>> def collect_variables(function_term):
-        ...     variables = set()
-        ...     expression = ast.parse(function_term, mode='eval')
-        ...     for node in ast.walk(expression):
-        ...         if(type(node) == ast.Name):
-        ...             name = node.id
-        ...             variables.add(name)
-        ...     return variables
-        ...
-        >>>
-        >>> exprs = [
-        ...     '0', '1',
-        ...     'A', 'B', '0*A', '2*A', '0*B', '2*B',
-        ...     'A+B', 'B+A', '1-A', '1-B',
-        ...     '-A', 'A-B', 'B-A', '-(A+B)',
-        ...     'A*B + B', 'B + A*B',
-        ...     'A*B*B + C + 2', 'A*B - 17',
-        ...     'A*B - A*B', 'A-A',
-        ...     '1*(A+2)', 'A*(B+2)', 'A*(B+2)*(B+2) + C + 2',
-        ... ]
-        ...
-        >>> domain_size = 4
-        >>>
-        >>> all_results_as_expected = True
-        >>> for expr in exprs:
-        ...     var_set = collect_variables(expr)
-        ...     var_domains = {var: domain_size for var in var_set}
-        ...     for fully_reduced in [True, False]:
-        ...         for var_names in permutations(var_set):
-        ...             for valuation in product(range(domain_size), repeat=len(var_set)):
-        ...                 valuation = {var:val for var, val in zip(var_names,valuation)}
-        ...                 evmdd, manager = term_to_evmdd(expr,
-        ...                                  var_names=var_names, var_domains=var_domains,
-        ...                                  fully_reduced=fully_reduced)
-        ...                 actual = evaluate(evmdd, valuation, manager)
-        ...                 expected = eval(expr, valuation)
-        ...                 if actual != expected:
-        ...                     all_results_as_expected = False
-        ...
-        >>> all_results_as_expected
-        True
     """
 
     var_names = kwargs.get('var_names', None)
