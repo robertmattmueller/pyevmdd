@@ -18,4 +18,14 @@ from .evmdd import Edge, EvmddManager, Node, evaluate
 from .graphviz import EvmddVisualizer, GraphvizWriter
 from .parser import collect_variables, read_function_term, term_to_evmdd
 
-__all__ = ['evmdd', 'parser', 'graphviz']
+__all__ = [
+    'Edge',
+    'EvmddManager',
+    'EvmddVisualizer',
+    'GraphvizWriter',
+    'Node',
+    'collect_variables',
+    'evaluate',
+    'read_function_term',
+    'term_to_evmdd',
+]
