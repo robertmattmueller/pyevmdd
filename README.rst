@@ -29,7 +29,7 @@ Development uses `uv <https://docs.astral.sh/uv/>`_::
 Copyright
 =========
 
-Copyright (C) 2016 Robert Mattmüller
+Copyright (C) 2016, 2026 Robert Mattmüller
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
