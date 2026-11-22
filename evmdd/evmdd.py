@@ -218,7 +218,8 @@ class Edge(EqualityMixin):
         * Pedram and Vrudhula, Edge-Valued Binary-Decision Diagrams,
           Algorithm `apply`.
         """
-        assert self.is_fully_reduced == other.is_fully_reduced
+        if self.is_fully_reduced != other.is_fully_reduced:
+            raise ValueError('Cannot combine fully reduced and quasi-reduced EVMDDs.')
 
         if _is_terminal_case(self, other):
             result = _terminal_value(self, other, oper, self.is_fully_reduced)
@@ -247,22 +248,26 @@ class Edge(EqualityMixin):
     def __add__(self, other):
         if isinstance(other, type(self)):
             return self._apply(other, Edge.__add__)
-        else:
-            assert isinstance(other, Integral)
+        elif isinstance(other, Integral):
             return Edge(
                 weight=self.weight + other, succ=self.succ, is_fully_reduced=self.is_fully_reduced
             )
+        else:
+            return NotImplemented
 
     def __sub__(self, other):
         if isinstance(other, type(self)):
             return self._apply(other, Edge.__sub__)
-        else:
-            assert isinstance(other, Integral)
+        elif isinstance(other, Integral):
             return Edge(
                 weight=self.weight - other, succ=self.succ, is_fully_reduced=self.is_fully_reduced
             )
+        else:
+            return NotImplemented
 
     def __mul__(self, other):
+        if not isinstance(other, type(self)):
+            return NotImplemented
         return self._apply(other, Edge.__mul__)
 
     def __neg__(self):
@@ -368,8 +373,27 @@ class EvmddManager(object):
     """
 
     def __init__(self, var_names, var_domains, fully_reduced=_DEFAULT_IS_FULLY_REDUCED):
-        """Initialize an `EvmddManager` with variable names and domain sizes."""
-        assert len(var_names) == len(var_domains)
+        """Initialize an `EvmddManager` with variable names and domain sizes.
+
+        Raises:
+            `ValueError`: if the variable names are not unique, if the number
+            of domain sizes does not match the number of variables, or if a
+            domain size is not a positive integer.
+        """
+        var_names = list(var_names)
+        var_domains = list(var_domains)
+        if len(set(var_names)) != len(var_names):
+            raise ValueError('Variable names must be unique: %s.' % ', '.join(var_names))
+        if len(var_names) != len(var_domains):
+            raise ValueError(
+                'Got %d variable names, but %d domain sizes.' % (len(var_names), len(var_domains))
+            )
+        for var_name, domain_size in zip(var_names, var_domains, strict=True):
+            if not isinstance(domain_size, Integral) or domain_size < 1:
+                raise ValueError(
+                    'Domain size of variable %s must be a positive integer, got %r.'
+                    % (var_name, domain_size)
+                )
         self._var_names = var_names
         self._var_domains = var_domains
         self._fully_reduced = fully_reduced
@@ -396,7 +420,8 @@ class EvmddManager(object):
 
     def _var_name_to_level(self, var_name):
         """Determine the level of a given variable name."""
-        assert var_name in self._var_names
+        if var_name not in self._var_names:
+            raise ValueError('Unknown variable %s.' % var_name)
         return len(self._var_names) - self._var_names.index(var_name)
 
     def var_name_of(self, node):
@@ -452,8 +477,8 @@ class EvmddManager(object):
             Edge: the |EVMDD| representing the given variable according to the
             variable order of this manager.
 
-        Note:
-            Fails if the given variable name is not known.
+        Raises:
+            `ValueError`: if the given variable name is not known.
         """
         return self._make_var_evmdd_for_level(self._var_name_to_level(var_name))
 
@@ -522,7 +547,11 @@ def evaluate(evmdd, valuation, manager):
             )
         var_name = manager.var_name_of(current_node)
         var_value = valuation[var_name]
-        assert 0 <= var_value < len(current_node.children)
+        if not 0 <= var_value < len(current_node.children):
+            raise ValueError(
+                'Value %r of variable %s is outside of its domain 0..%d.'
+                % (var_value, var_name, len(current_node.children) - 1)
+            )
         current_edge = current_node.children[var_value]
         result = result + current_edge.weight
         current_node = current_edge.succ

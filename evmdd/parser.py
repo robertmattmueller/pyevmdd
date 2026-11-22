@@ -23,7 +23,7 @@ function terms specified in Python syntax to |EVMDDs|.
 """
 
 import ast
-from numbers import Integral, Number
+from numbers import Integral
 
 from .evmdd import EvmddManager
 
@@ -42,16 +42,16 @@ _LEGAL_EXPRESSIONS = [
 ]
 
 
-def _is_numeric_constant(node):
-    """Test if `node` is a numeric literal.
+def _is_integer_constant(node):
+    """Test if `node` is an integer literal.
 
     Since Python 3.8, all literals are represented as `ast.Constant`, so
-    strings, bytes, booleans, ``None`` and ``...`` have to be excluded
-    explicitly.
+    floats, strings, bytes, booleans, ``None`` and ``...`` have to be
+    excluded explicitly.
     """
     return (
         isinstance(node, ast.Constant)
-        and isinstance(node.value, Number)
+        and isinstance(node.value, Integral)
         and not isinstance(node.value, bool)
     )
 
@@ -65,12 +65,24 @@ def read_function_term(function_term):
 
     Returns:
         `AST`: the abstract syntax tree representing function_term.
+
+    Raises:
+        `SyntaxError`: if `function_term` is not valid Python syntax.
+
+        `ValueError`: if `function_term` contains anything but integer
+        constants, variables, and the operators listed above.
     """
     expression = ast.parse(function_term, mode='eval')
     for node in ast.walk(expression):
-        assert type(node) in _LEGAL_EXPRESSIONS
-        if isinstance(node, ast.Constant):
-            assert _is_numeric_constant(node)
+        if type(node) not in _LEGAL_EXPRESSIONS:
+            raise ValueError(
+                'Unsupported syntax %s in function term %r.' % (type(node).__name__, function_term)
+            )
+        if isinstance(node, ast.Constant) and not _is_integer_constant(node):
+            raise ValueError(
+                'Unsupported constant %r in function term %r. Only integers are allowed.'
+                % (node.value, function_term)
+            )
     return expression
 
 
@@ -110,8 +122,8 @@ def _to_evmdd_rec(node, manager):
     Returns:
         `Edge`: the corresponding |EVMDD|.
     """
-    if _is_numeric_constant(node):
-        return manager.make_const_evmdd(int(node.value))
+    if _is_integer_constant(node):
+        return manager.make_const_evmdd(node.value)
     elif isinstance(node, ast.Name):
         return manager.make_var_evmdd_for_var(node.id)
     elif isinstance(node, ast.BinOp):
@@ -125,11 +137,7 @@ def _to_evmdd_rec(node, manager):
             return left * right
         else:
             assert isinstance(node.op, ast.Pow)
-            if (
-                (not _is_numeric_constant(node.right))
-                or (not isinstance(node.right.value, Integral))
-                or (node.right.value < 0)
-            ):
+            if not _is_integer_constant(node.right) or node.right.value < 0:
                 raise ValueError('EVMDDs may only be raised to a nonnegative integral power.')
             return left**node.right.value
     else:
@@ -138,8 +146,8 @@ def _to_evmdd_rec(node, manager):
         return -_to_evmdd_rec(node.operand, manager)
 
 
-def term_to_evmdd(function_term, **kwargs):
-    r"""Translate a function term to the corresponding |EVMDD|.
+def term_to_evmdd(function_term, *, var_names=None, var_domains=None, fully_reduced=True):
+    """Translate a function term to the corresponding |EVMDD|.
 
     The variable names in the desired variable ordering can be optionally
     specified. If no variable ordering is specified, the variable names are
@@ -153,14 +161,22 @@ def term_to_evmdd(function_term, **kwargs):
         constants, variables, addition, subtraction exponentiation to natural-
         numbered powers, and multiplication.
 
-        \*\*\ `kwargs`: optionally, the variable names in the desired ordering,
-        `var_names` (list of strings), their domain sizes `var_domains`
-        (dict from strings to ints), and a flag `fully_reduced`
-        determining whether the |EVMDD| should be fully reduced or
-        quasi-reduced.
+        `var_names` (list of strings, optional): the variable names in the
+        desired ordering.
+
+        `var_domains` (dict from strings to ints, optional): the domain
+        sizes of the variables.
+
+        `fully_reduced` (bool, optional): whether the |EVMDD| should be
+        fully reduced (default) or quasi-reduced.
 
     Returns:
         a tuple consisting of the corresponding |EVMDD| and its manager.
+
+    Raises:
+        `ValueError`: if the function term is not supported, or if
+        `var_names` or `var_domains` do not cover all variables occurring
+        in it.
 
     The following example code constructs the fully reduced |EVMDD| for the
     running example :math:`f(A,B,C) = AB^2 + C + 2` for variable ordering
@@ -179,22 +195,24 @@ def term_to_evmdd(function_term, **kwargs):
         >>> evaluate(evmdd, valuation, manager)
         6
     """
-
-    var_names = kwargs.get('var_names', None)
-    var_domains = kwargs.get('var_domains', None)
-    fully_reduced = kwargs.get('fully_reduced', True)
-
     function_term_ast = read_function_term(function_term)
+    term_variables = collect_variables(function_term_ast)
 
     if not var_names:
-        var_names = sorted(list(collect_variables(function_term_ast)))
+        var_names = sorted(term_variables)
 
-    assert collect_variables(function_term_ast) <= set(var_names)
+    missing = term_variables - set(var_names)
+    if missing:
+        raise ValueError(
+            'Variables %s missing from variable ordering.' % ', '.join(sorted(missing))
+        )
 
     if not var_domains:
         var_domains = {var: 2 for var in var_names}
 
-    assert all([var in var_domains for var in var_names])
+    missing = [var for var in var_names if var not in var_domains]
+    if missing:
+        raise ValueError('No domain sizes given for variables %s.' % ', '.join(missing))
     var_domains = [var_domains[var] for var in var_names]
 
     manager = EvmddManager(var_names, var_domains, fully_reduced)

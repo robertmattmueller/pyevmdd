@@ -98,7 +98,24 @@ def test_illegal_exponent_is_rejected(expr):
         term_to_evmdd(expr)
 
 
-@pytest.mark.parametrize('expr', ['A / B', 'A % 2', 'f(A)', "'x' + A", 'True + A', 'None'])
+@pytest.mark.parametrize(
+    'expr', ['A / B', 'A % 2', 'f(A)', "'x' + A", 'True + A', 'None', '2.5 * A', '1j']
+)
 def test_illegal_syntax_is_rejected(expr):
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         read_function_term(expr)
+
+
+def test_variable_missing_from_ordering_is_rejected():
+    with pytest.raises(ValueError, match='C'):
+        term_to_evmdd('A + C', var_names=['A', 'B'])
+
+
+def test_variable_missing_from_domains_is_rejected():
+    with pytest.raises(ValueError, match='B'):
+        term_to_evmdd('A + B', var_domains={'A': 2})
+
+
+def test_unknown_keyword_argument_is_rejected():
+    with pytest.raises(TypeError):
+        term_to_evmdd('A', var_order=['A'])
