@@ -103,3 +103,18 @@ def test_shared_sub_evmdds_are_traversed_once():
         edge = Edge(0, node, is_fully_reduced=False)
     assert edge.num_nodes() == depth + 1
     assert edge.num_edges() == 2 * depth + 1
+
+
+@pytest.mark.parametrize('fully_reduced', [True, False])
+def test_apply_combines_shared_sub_evmdds_only_once(fully_reduced):
+    # Without caching in apply, building this sum takes time exponential in
+    # the number of variables (about 3**30 recursive calls).
+    names = [f'X{i}' for i in range(30)]
+    evmdd, manager = term_to_evmdd(
+        ' + '.join(names),
+        var_names=names,
+        var_domains={var: 3 for var in names},
+        fully_reduced=fully_reduced,
+    )
+    assert evmdd.num_nodes() == len(names) + 1
+    assert evaluate(evmdd, {var: 2 for var in names}, manager) == 2 * len(names)

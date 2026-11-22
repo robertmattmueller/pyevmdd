@@ -218,8 +218,12 @@ class Edge:
         """Get the number of edges in this |EVMDD|."""
         return sum([len(node.children) for node in self.nodes()]) + 1
 
-    def _apply(self, other, oper):
+    def _apply(self, other, oper, cache=None):
         """Apply an arithmetic operator `oper` to two |EVMDDs| `self` and `other`.
+
+        Results of recursive calls are stored in `cache`, a dictionary from
+        pairs of edges to results, so that shared sub-|EVMDDs| are combined
+        only once per top-level operation.
 
         See:
 
@@ -236,13 +240,20 @@ class Edge:
             _log_apply(self, other, oper, result, True)
             return result
 
+        if cache is None:
+            cache = {}
+        elif (self, other) in cache:
+            return cache[(self, other)]
+
         level = max(self.succ.level, other.succ.level)
         self_children = _align_levels(self, other)
         other_children = _align_levels(other, self)
 
         assert len(self_children) == len(other_children)
 
-        children = [oper(sc, oc) for sc, oc in zip(self_children, other_children, strict=True)]
+        children = [
+            sc._apply(oc, oper, cache) for sc, oc in zip(self_children, other_children, strict=True)
+        ]
         result_weight = min([child.weight for child in children])
         children = tuple([child - result_weight for child in children])
         result_succ = Node(level, children, self.is_fully_reduced)
@@ -253,6 +264,7 @@ class Edge:
             weight=result_weight, succ=result_succ, is_fully_reduced=self.is_fully_reduced
         )
         _log_apply(self, other, oper, result, False)
+        cache[(self, other)] = result
         return result
 
     def __add__(self, other):
