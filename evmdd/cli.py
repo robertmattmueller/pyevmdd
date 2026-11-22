@@ -1,11 +1,31 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+# This file is part of the EVMDD Library for Python (pyevmdd).
+# Copyright (C) 2016 Robert Mattmüller
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+"""
+Command line interface for constructing and visualizing |EVMDDs|.
+"""
+
 import sys
 import logging
 
-from evmdd.graphviz import EvmddVisualizer
-from evmdd.parser import term_to_evmdd
+from .graphviz import EvmddVisualizer
+from .parser import term_to_evmdd
 
 def _print_usage():
     print('usage:   %s "<function term in Python syntax>"' % (
@@ -45,6 +65,7 @@ def _parse_command_line():
     return function_term, var_names, var_domains
 
 def main():
+    logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
     function_term, var_names, var_domains = _parse_command_line()
     evmdd, manager = term_to_evmdd(function_term,
                                    var_names=var_names, var_domains=var_domains, fully_reduced=True)
@@ -52,5 +73,4 @@ def main():
     visualizer.visualize(evmdd)
 
 if __name__ == '__main__':
-    logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
     main()

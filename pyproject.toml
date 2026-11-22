@@ -1,3 +1,39 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyevmdd"
+version = "0.1.dev1"
+description = "EVMDD Library for Python"
+readme = "README.rst"
+requires-python = ">=3.10"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE.txt"]
+authors = [{ name = "Robert Mattmüller", email = "robert@robert-mattmueller.de" }]
+keywords = ["evmdd", "decision diagrams"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/robertmattmueller/pyevmdd"
+
+[project.scripts]
+evmdd = "evmdd.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.setuptools]
+packages = ["evmdd"]
+
 [tool.pytest.ini_options]
 testpaths = ["evmdd", "tests"]
 addopts = "--doctest-modules"
