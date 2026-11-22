@@ -25,6 +25,7 @@ Development uses `uv <https://docs.astral.sh/uv/>`_::
     uv run ruff check
     uv run ruff format
     uv run mypy
+    uv run --group docs sphinx-build -W -b html sphinx sphinx/_build/html
 
 Copyright
 =========
