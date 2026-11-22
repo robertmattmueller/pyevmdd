@@ -24,6 +24,7 @@ Development uses `uv <https://docs.astral.sh/uv/>`_::
     uv run pytest
     uv run ruff check
     uv run ruff format
+    uv run mypy
 
 Copyright
 =========

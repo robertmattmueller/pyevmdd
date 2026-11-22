@@ -29,10 +29,17 @@ Homepage = "https://github.com/robertmattmueller/pyevmdd"
 evmdd = "evmdd.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.15"]
+dev = ["mypy>=1.18", "pytest>=8", "ruff>=0.15"]
 
 [tool.setuptools]
 packages = ["evmdd"]
+
+[tool.setuptools.package-data]
+evmdd = ["py.typed"]
+
+[tool.mypy]
+files = ["evmdd"]
+strict = true
 
 [tool.ruff]
 line-length = 100

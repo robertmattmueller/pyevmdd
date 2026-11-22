@@ -22,9 +22,12 @@ import logging
 import os
 import subprocess
 import tempfile
+from collections.abc import Iterable
 from itertools import groupby
 from operator import attrgetter
 from sys import platform
+
+from .evmdd import Edge, EvmddManager, Node
 
 
 class GraphvizWriter:
@@ -41,35 +44,37 @@ class GraphvizWriter:
     _var_node_name_tmpl = '"s%s[level=%s]"'
     _weight_node_name_tmpl = '"s%s[level=%s]=%s"'
 
-    def __init__(self, manager):
+    def __init__(self, manager: EvmddManager) -> None:
         self._manager = manager
-        self._index = None
+        self._index: dict[Node, int] = {}
 
-    def _root_node_gvz(self, var_node_name):
+    def _root_node_gvz(self, var_node_name: str) -> str:
         return self._root_node_gvz_tmpl % var_node_name
 
-    def _var_node_gvz(self, var_node_name, var_name):
+    def _var_node_gvz(self, var_node_name: str, var_name: str) -> str:
         return self._var_node_gvz_tmpl % (var_node_name, var_name)
 
-    def _sink_node_gvz(self, var_node_name):
+    def _sink_node_gvz(self, var_node_name: str) -> str:
         return self._sink_node_gvz_tmpl % var_node_name
 
-    def _weight_node_gvz(self, weight_node_name, weight):
+    def _weight_node_gvz(self, weight_node_name: str, weight: int) -> str:
         return self._weight_node_gvz_tmpl % (weight_node_name, weight)
 
-    def _var_to_weight_edge_gvz(self, var_node_name, weight_node_name, domain_idx):
+    def _var_to_weight_edge_gvz(
+        self, var_node_name: str, weight_node_name: str, domain_idx: int | str
+    ) -> str:
         return self._var_to_weight_edge_gvz_tmpl % (var_node_name, weight_node_name, domain_idx)
 
-    def _weight_to_var_edge_gvz(self, weight_node_name, succ_var_node_name):
+    def _weight_to_var_edge_gvz(self, weight_node_name: str, succ_var_node_name: str) -> str:
         return self._weight_to_var_edge_gvz_tmpl % (weight_node_name, succ_var_node_name)
 
-    def _var_node_name(self, node):
+    def _var_node_name(self, node: Node) -> str:
         return self._var_node_name_tmpl % (self._index[node], node.level)
 
-    def _weight_node_name(self, node, domain_idx):
+    def _weight_node_name(self, node: Node, domain_idx: int) -> str:
         return self._weight_node_name_tmpl % (self._index[node], node.level, domain_idx)
 
-    def _root_edge_to_gvz(self, evmdd):
+    def _root_edge_to_gvz(self, evmdd: Edge) -> list[str]:
         var_node_name = 'dummyNode'
         weight_node_name = 'constantWeight'
         var_node = self._root_node_gvz(var_node_name)
@@ -79,7 +84,7 @@ class GraphvizWriter:
         weight_to_var_edge = self._weight_to_var_edge_gvz(weight_node_name, succ_var_node_name)
         return [var_node, weight_node, var_to_weight_edge, weight_to_var_edge]
 
-    def _node_to_gvz(self, node):
+    def _node_to_gvz(self, node: Node) -> list[str]:
         var_node_name = self._var_node_name(node)
         if node.is_sink_node():
             return [self._sink_node_gvz(var_node_name)]
@@ -97,11 +102,11 @@ class GraphvizWriter:
             result.extend([weight_node, var_to_weight_edge, weight_to_var_edge])
         return result
 
-    def _node_rank_to_gvz(self, rank):
-        rank = ';'.join([self._var_node_name(node) for node in rank])
-        return f'{{rank = same; {rank};}}'
+    def _node_rank_to_gvz(self, rank: Iterable[Node]) -> str:
+        node_names = ';'.join([self._var_node_name(node) for node in rank])
+        return f'{{rank = same; {node_names};}}'
 
-    def evmdd_to_gvz(self, evmdd):
+    def evmdd_to_gvz(self, evmdd: Edge) -> str:
         """Translate a given |EVMDD| to Graphviz format.
 
         Args:
@@ -110,9 +115,8 @@ class GraphvizWriter:
         Returns:
             `string`: an encoding of the |EVMDD| in Graphviz/DOT format.
         """
-        nodes = evmdd.nodes()
         sorting_fn = attrgetter('level')
-        nodes = sorted(nodes, key=sorting_fn)
+        nodes = sorted(evmdd.nodes(), key=sorting_fn)
 
         self._index = {node: idx for idx, node in enumerate(nodes)}
         lines = ['digraph G {']
@@ -128,13 +132,13 @@ class GraphvizWriter:
 class EvmddVisualizer:
     """Helper class that displays |EVMDDs| on the screen."""
 
-    def __init__(self, manager):
+    def __init__(self, manager: EvmddManager) -> None:
         self._gvz_writer = GraphvizWriter(manager)
 
-    def _encode_in_gvz_format(self, evmdd):
+    def _encode_in_gvz_format(self, evmdd: Edge) -> str:
         return self._gvz_writer.evmdd_to_gvz(evmdd)
 
-    def _run(self, cmd):
+    def _run(self, cmd: list[str]) -> bool:
         """Run an external command. Return true iff it succeeded."""
         try:
             subprocess.run(cmd, check=True)
@@ -143,7 +147,7 @@ class EvmddVisualizer:
             return False
         return True
 
-    def visualize(self, evmdd, file_prefix=None):
+    def visualize(self, evmdd: Edge, file_prefix: str | None = None) -> None:
         """Visualize a given |EVMDD|.
 
         The given |EVMDD| is first exported in Graphviz/DOT syntax and

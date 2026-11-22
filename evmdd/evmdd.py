@@ -26,14 +26,21 @@ supposed to deal with fully reduced (if true) or quasi-reduced (if false)
 |EVMDDs|.
 """
 
+from __future__ import annotations
+
 import logging
+from collections.abc import Callable, Iterable, Mapping
 from numbers import Integral
+from typing import ClassVar
 from weakref import WeakValueDictionary
 
 _DEFAULT_IS_FULLY_REDUCED = True
 
+# One of Edge.__add__, Edge.__sub__, and Edge.__mul__.
+_Operator = Callable[['Edge', 'Edge'], 'Edge']
 
-def _make_sink_node(is_fully_reduced=_DEFAULT_IS_FULLY_REDUCED):
+
+def _make_sink_node(is_fully_reduced: bool = _DEFAULT_IS_FULLY_REDUCED) -> Node:
     """Create the unique 0-sink node.
 
     Since uniqueness is only enforced among |EVMDDs| of the same type,
@@ -46,7 +53,7 @@ def _make_sink_node(is_fully_reduced=_DEFAULT_IS_FULLY_REDUCED):
     return Node(level=0, children=[], is_fully_reduced=is_fully_reduced)
 
 
-def _make_const_evmdd(number, is_fully_reduced=_DEFAULT_IS_FULLY_REDUCED):
+def _make_const_evmdd(number: int, is_fully_reduced: bool = _DEFAULT_IS_FULLY_REDUCED) -> Edge:
     """Construct an |EVMDD| representing a given constant number.
 
     This is the |EVMDD| with a single edge immediately leading to the sink
@@ -57,7 +64,7 @@ def _make_const_evmdd(number, is_fully_reduced=_DEFAULT_IS_FULLY_REDUCED):
     )
 
 
-def _aggregate_weights(weight1, weight2, oper):
+def _aggregate_weights(weight1: int, weight2: int, oper: _Operator) -> int:
     """Aggregate weights according to operator.
 
     If `oper` is addition/subtraction/multiplication,
@@ -73,12 +80,12 @@ def _aggregate_weights(weight1, weight2, oper):
         return weight1 * weight2
 
 
-def _is_terminal_case(edge1, edge2):
+def _is_terminal_case(edge1: Edge, edge2: Edge) -> bool:
     """Test if `edge1` and `edge2` are both sink edges with constant value."""
     return edge1.succ.is_sink_node() and edge2.succ.is_sink_node()
 
 
-def _terminal_value(edge1, edge2, oper, is_fully_reduced):
+def _terminal_value(edge1: Edge, edge2: Edge, oper: _Operator, is_fully_reduced: bool) -> Edge:
     """Compute the new |EVMDD| for `edge1 oper edge2` in the terminal case
     where no more recursion is needed.
 
@@ -95,7 +102,7 @@ def _terminal_value(edge1, edge2, oper, is_fully_reduced):
     return _make_const_evmdd(number=result_weight, is_fully_reduced=is_fully_reduced)
 
 
-def _align_levels(edge1, edge2):
+def _align_levels(edge1: Edge, edge2: Edge) -> list[Edge]:
     """In case one of the |EVMDDs| to which an arithmetic operation is
     applied is not quasi-reduced, it can happen that the two top-most nodes
     of the two |EVMDDs| are on different levels (= represent different
@@ -114,7 +121,7 @@ def _align_levels(edge1, edge2):
         return len(edge2.succ.children) * [edge1]
 
 
-def _log_apply(edge1, edge2, oper, result, terminal):
+def _log_apply(edge1: Edge, edge2: Edge, oper: _Operator, result: Edge, terminal: bool) -> None:
     """Log result of operator application to two edges.
 
     Args:
@@ -143,7 +150,7 @@ def _log_apply(edge1, edge2, oper, result, terminal):
     )
 
 
-def _perform_shannon_reduction(succ):
+def _perform_shannon_reduction(succ: Node) -> Node:
     """Perform Shannon reduction while combining two |EVMDDs| into one.
 
     If all outgoing edges (`children`) from the next node (`succ`) reached via
@@ -192,9 +199,17 @@ class Edge:
     """
 
     __slots__ = ('weight', 'succ', 'is_fully_reduced', '__weakref__')
-    _unique_table = WeakValueDictionary()
+    _unique_table: ClassVar[WeakValueDictionary[tuple[int, Node, bool], Edge]] = (
+        WeakValueDictionary()
+    )
 
-    def __new__(cls, weight, succ, is_fully_reduced=_DEFAULT_IS_FULLY_REDUCED):
+    weight: int
+    succ: Node
+    is_fully_reduced: bool
+
+    def __new__(
+        cls, weight: int, succ: Node, is_fully_reduced: bool = _DEFAULT_IS_FULLY_REDUCED
+    ) -> Edge:
         """Get the unique `Edge` with given weight and successor node."""
         key = (weight, succ, is_fully_reduced)
         edge = cls._unique_table.get(key)
@@ -206,19 +221,21 @@ class Edge:
             cls._unique_table[key] = edge
         return edge
 
-    def nodes(self):
+    def nodes(self) -> set[Node]:
         """Get all nodes in the (sub-) |EVMDD| rooted at this edge."""
         return self.succ.nodes()
 
-    def num_nodes(self):
+    def num_nodes(self) -> int:
         """Get the number of nodes in this |EVMDD|."""
         return len(self.nodes())
 
-    def num_edges(self):
+    def num_edges(self) -> int:
         """Get the number of edges in this |EVMDD|."""
         return sum([len(node.children) for node in self.nodes()]) + 1
 
-    def _apply(self, other, oper, cache=None):
+    def _apply(
+        self, other: Edge, oper: _Operator, cache: dict[tuple[Edge, Edge], Edge] | None = None
+    ) -> Edge:
         """Apply an arithmetic operator `oper` to two |EVMDDs| `self` and `other`.
 
         Results of recursive calls are stored in `cache`, a dictionary from
@@ -251,11 +268,11 @@ class Edge:
 
         assert len(self_children) == len(other_children)
 
-        children = [
+        unnormalized_children = [
             sc._apply(oc, oper, cache) for sc, oc in zip(self_children, other_children, strict=True)
         ]
-        result_weight = min([child.weight for child in children])
-        children = tuple([child - result_weight for child in children])
+        result_weight = min([child.weight for child in unnormalized_children])
+        children = tuple([child - result_weight for child in unnormalized_children])
         result_succ = Node(level, children, self.is_fully_reduced)
 
         if self.is_fully_reduced:
@@ -267,7 +284,7 @@ class Edge:
         cache[(self, other)] = result
         return result
 
-    def __add__(self, other):
+    def __add__(self, other: Edge | int) -> Edge:
         if isinstance(other, type(self)):
             return self._apply(other, Edge.__add__)
         elif isinstance(other, Integral):
@@ -277,7 +294,7 @@ class Edge:
         else:
             return NotImplemented
 
-    def __sub__(self, other):
+    def __sub__(self, other: Edge | int) -> Edge:
         if isinstance(other, type(self)):
             return self._apply(other, Edge.__sub__)
         elif isinstance(other, Integral):
@@ -287,25 +304,25 @@ class Edge:
         else:
             return NotImplemented
 
-    def __mul__(self, other):
+    def __mul__(self, other: Edge) -> Edge:
         if not isinstance(other, type(self)):
             return NotImplemented
         return self._apply(other, Edge.__mul__)
 
-    def __neg__(self):
+    def __neg__(self) -> Edge:
         return _make_const_evmdd(0, self.is_fully_reduced) - self
 
-    def __pow__(self, other):
+    def __pow__(self, other: int) -> Edge:
         if not isinstance(other, Integral) or other < 0:
             raise ValueError('EVMDDs may only be raised to a nonnegative integral power.')
         if other == 0:
             return _make_const_evmdd(1, self.is_fully_reduced)
         return self * (self ** (other - 1))
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f'Edge({self.weight},{self.succ})'
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f'Edge(weight={self.weight},succ={self.succ!r},'
             f'is_fully_reduced={self.is_fully_reduced})'
@@ -352,9 +369,20 @@ class Node:
     """
 
     __slots__ = ('level', 'children', 'is_fully_reduced', '__weakref__')
-    _unique_table = WeakValueDictionary()
+    _unique_table: ClassVar[WeakValueDictionary[tuple[int, tuple[Edge, ...], bool], Node]] = (
+        WeakValueDictionary()
+    )
 
-    def __new__(cls, level, children, is_fully_reduced=_DEFAULT_IS_FULLY_REDUCED):
+    level: int
+    children: tuple[Edge, ...]
+    is_fully_reduced: bool
+
+    def __new__(
+        cls,
+        level: int,
+        children: Iterable[Edge],
+        is_fully_reduced: bool = _DEFAULT_IS_FULLY_REDUCED,
+    ) -> Node:
         """Get the unique |EVMDD| node with given level and children."""
         children = tuple(children)
         key = (level, children, is_fully_reduced)
@@ -370,11 +398,11 @@ class Node:
             cls._unique_table[key] = node
         return node
 
-    def is_sink_node(self):
+    def is_sink_node(self) -> bool:
         """Test if this is the sink node."""
         return len(self.children) == 0
 
-    def nodes(self):
+    def nodes(self) -> set[Node]:
         """Get all nodes in the (sub-) |EVMDD| rooted at this node.
 
         Shared sub-|EVMDDs| are only traversed once.
@@ -389,13 +417,13 @@ class Node:
                     stack.append(child.succ)
         return result
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.is_sink_node():
             return '0'
         children = ','.join([str(child) for child in self.children])
         return f'Node({self.level},[{children}])'
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f'Node(level={self.level},children={self.children!r},'
             f'is_fully_reduced={self.is_fully_reduced})'
@@ -421,7 +449,12 @@ class EvmddManager:
     `fully_reduced` is set to true (default).
     """
 
-    def __init__(self, var_names, var_domains, fully_reduced=_DEFAULT_IS_FULLY_REDUCED):
+    def __init__(
+        self,
+        var_names: Iterable[str],
+        var_domains: Iterable[int],
+        fully_reduced: bool = _DEFAULT_IS_FULLY_REDUCED,
+    ) -> None:
         """Initialize an `EvmddManager` with variable names and domain sizes.
 
         Raises:
@@ -447,7 +480,7 @@ class EvmddManager:
         self._var_domains = var_domains
         self._fully_reduced = fully_reduced
 
-    def _level_to_domain_size(self, level):
+    def _level_to_domain_size(self, level: int) -> int:
         """Get the domain size of the variable associated with nodes on a given `level`.
 
         This is only specified if the level neither encodes the dangling incoming
@@ -457,7 +490,7 @@ class EvmddManager:
         assert 1 <= level <= len(self._var_domains)
         return self._var_domains[-level]
 
-    def _level_to_var_name(self, level):
+    def _level_to_var_name(self, level: int) -> str:
         """Get the variable name associated with |EVMDD| nodes on a given `level`.
 
         This is only specified if the level neither encodes the dangling incoming
@@ -467,13 +500,13 @@ class EvmddManager:
         assert 1 <= level <= len(self._var_names)
         return self._var_names[-level]
 
-    def _var_name_to_level(self, var_name):
+    def _var_name_to_level(self, var_name: str) -> int:
         """Determine the level of a given variable name."""
         if var_name not in self._var_names:
             raise ValueError(f'Unknown variable {var_name}.')
         return len(self._var_names) - self._var_names.index(var_name)
 
-    def var_name_of(self, node):
+    def var_name_of(self, node: Node) -> str:
         """Determine the variable name associated with a given node.
 
         Args:
@@ -484,7 +517,7 @@ class EvmddManager:
         """
         return self._level_to_var_name(node.level)
 
-    def make_const_evmdd(self, number):
+    def make_const_evmdd(self, number: int) -> Edge:
         """Construct an |EVMDD| representing a given constant number.
 
         This is the |EVMDD| with a single edge immediately leading to the sink
@@ -498,7 +531,7 @@ class EvmddManager:
         """
         return _make_const_evmdd(number, self._fully_reduced)
 
-    def _make_var_evmdd_for_level(self, level):
+    def _make_var_evmdd_for_level(self, level: int) -> Edge:
         """Construct an |EVMDD| representing a given variable.
 
         This is the |EVMDD| with an edge with weight zero leading to a variable
@@ -516,7 +549,7 @@ class EvmddManager:
         var_node = Node(level=level, children=children, is_fully_reduced=self._fully_reduced)
         return Edge(weight=0, succ=var_node, is_fully_reduced=self._fully_reduced)
 
-    def make_var_evmdd_for_var(self, var_name):
+    def make_var_evmdd_for_var(self, var_name: str) -> Edge:
         """Construct an |EVMDD| representing a given variable.
 
         Args:
@@ -532,7 +565,7 @@ class EvmddManager:
         return self._make_var_evmdd_for_level(self._var_name_to_level(var_name))
 
 
-def evaluate(evmdd, valuation, manager):
+def evaluate(evmdd: Edge, valuation: Mapping[str, int], manager: EvmddManager) -> int:
     """Evaluate an |EVMDD| `evmdd` for given valuation `valuation` and
     EvmddManager `manager`.
 

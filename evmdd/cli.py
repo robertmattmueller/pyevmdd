@@ -20,16 +20,17 @@ Command line interface for constructing and visualizing |EVMDDs|.
 
 import argparse
 import logging
+from collections.abc import Sequence
 
 from .graphviz import EvmddVisualizer, GraphvizWriter
 from .parser import term_to_evmdd
 
 
-def _parse_comma_separated_list(line):
+def _parse_comma_separated_list(line: str) -> list[str]:
     return [s.strip() for s in line.split(',')]
 
 
-def _make_argument_parser():
+def _make_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog='evmdd',
         description='Construct the EVMDD for an arithmetic function term and visualize it.',
@@ -65,9 +66,13 @@ def _make_argument_parser():
     return parser
 
 
-def _parse_var_domains(parser, var_names, var_domains):
+def _parse_var_domains(
+    parser: argparse.ArgumentParser, var_names: list[str] | None, var_domains: list[str] | None
+) -> dict[str, int] | None:
     if var_domains is None:
         return None
+    # argparse only fills the second optional positional argument if the first one is given.
+    assert var_names is not None
     if len(var_names) != len(var_domains):
         parser.error(f'got {len(var_names)} variable names, but {len(var_domains)} domain sizes')
     try:
@@ -76,7 +81,7 @@ def _parse_var_domains(parser, var_names, var_domains):
         parser.error(f'domain sizes must be integers: {", ".join(var_domains)}')
 
 
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> None:
     """Run the command line interface.
 
     Args:

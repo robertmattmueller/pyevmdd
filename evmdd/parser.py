@@ -20,9 +20,9 @@ function terms specified in Python syntax to |EVMDDs|.
 """
 
 import ast
-from numbers import Integral
+from collections.abc import Mapping, Sequence
 
-from .evmdd import EvmddManager
+from .evmdd import Edge, EvmddManager
 
 _LEGAL_EXPRESSIONS = [
     ast.Expression,
@@ -39,21 +39,23 @@ _LEGAL_EXPRESSIONS = [
 ]
 
 
-def _is_integer_constant(node):
-    """Test if `node` is an integer literal.
+def _integer_value(node: ast.AST) -> int | None:
+    """Get the value of `node` if it is an integer literal, and ``None`` otherwise.
 
     Since Python 3.8, all literals are represented as `ast.Constant`, so
     floats, strings, bytes, booleans, ``None`` and ``...`` have to be
     excluded explicitly.
     """
-    return (
+    if (
         isinstance(node, ast.Constant)
-        and isinstance(node.value, Integral)
+        and isinstance(node.value, int)
         and not isinstance(node.value, bool)
-    )
+    ):
+        return node.value
+    return None
 
 
-def read_function_term(function_term):
+def read_function_term(function_term: str) -> ast.Expression:
     """Read a function term and transform it into an AST.
 
     Args:
@@ -75,7 +77,7 @@ def read_function_term(function_term):
             raise ValueError(
                 f'Unsupported syntax {type(node).__name__} in function term {function_term!r}.'
             )
-        if isinstance(node, ast.Constant) and not _is_integer_constant(node):
+        if isinstance(node, ast.Constant) and _integer_value(node) is None:
             raise ValueError(
                 f'Unsupported constant {node.value!r} in function term {function_term!r}. '
                 'Only integers are allowed.'
@@ -83,7 +85,7 @@ def read_function_term(function_term):
     return expression
 
 
-def collect_variables(function_term_ast):
+def collect_variables(function_term_ast: ast.AST) -> set[str]:
     """Determine the set of all variables occurring in a given function term.
 
     Args:
@@ -100,7 +102,7 @@ def collect_variables(function_term_ast):
     return variables
 
 
-def _to_evmdd_rec(node, manager):
+def _to_evmdd_rec(node: ast.AST, manager: EvmddManager) -> Edge:
     """Translate a function term represented as an AST to the corresponding
     EVMDD recursively.
 
@@ -119,8 +121,9 @@ def _to_evmdd_rec(node, manager):
     Returns:
         `Edge`: the corresponding |EVMDD|.
     """
-    if _is_integer_constant(node):
-        return manager.make_const_evmdd(node.value)
+    value = _integer_value(node)
+    if value is not None:
+        return manager.make_const_evmdd(value)
     elif isinstance(node, ast.Name):
         return manager.make_var_evmdd_for_var(node.id)
     elif isinstance(node, ast.BinOp):
@@ -134,16 +137,23 @@ def _to_evmdd_rec(node, manager):
             return left * right
         else:
             assert isinstance(node.op, ast.Pow)
-            if not _is_integer_constant(node.right) or node.right.value < 0:
+            exponent = _integer_value(node.right)
+            if exponent is None or exponent < 0:
                 raise ValueError('EVMDDs may only be raised to a nonnegative integral power.')
-            return left**node.right.value
+            return left**exponent
     else:
         assert isinstance(node, ast.UnaryOp)
         assert isinstance(node.op, ast.USub)
         return -_to_evmdd_rec(node.operand, manager)
 
 
-def term_to_evmdd(function_term, *, var_names=None, var_domains=None, fully_reduced=True):
+def term_to_evmdd(
+    function_term: str,
+    *,
+    var_names: Sequence[str] | None = None,
+    var_domains: Mapping[str, int] | None = None,
+    fully_reduced: bool = True,
+) -> tuple[Edge, EvmddManager]:
     """Translate a function term to the corresponding |EVMDD|.
 
     The variable names in the desired variable ordering can be optionally
@@ -205,12 +215,12 @@ def term_to_evmdd(function_term, *, var_names=None, var_domains=None, fully_redu
     if not var_domains:
         var_domains = {var: 2 for var in var_names}
 
-    missing = [var for var in var_names if var not in var_domains]
-    if missing:
-        raise ValueError(f'No domain sizes given for variables {", ".join(missing)}.')
-    var_domains = [var_domains[var] for var in var_names]
+    without_domain = [var for var in var_names if var not in var_domains]
+    if without_domain:
+        raise ValueError(f'No domain sizes given for variables {", ".join(without_domain)}.')
+    domain_sizes = [var_domains[var] for var in var_names]
 
-    manager = EvmddManager(var_names, var_domains, fully_reduced)
+    manager = EvmddManager(var_names, domain_sizes, fully_reduced)
 
     assert isinstance(function_term_ast, ast.Expression)
     return _to_evmdd_rec(function_term_ast.body, manager), manager
